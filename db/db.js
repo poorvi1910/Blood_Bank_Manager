@@ -3,7 +3,7 @@ const oracledb = require('oracledb');
 const dbConfig = {
   user: "SYSTEM",
   password: "pmysql",
-  connectString: "localhost:1521/XE" // Change to xepdb1 if needed
+  connectString: "localhost:1521/XE"
 };
 
 async function executeQuery(query, binds = []) {
@@ -21,6 +21,5 @@ async function executeQuery(query, binds = []) {
     }
 }
 
-// Export for use in other files
 module.exports = { executeQuery };
 

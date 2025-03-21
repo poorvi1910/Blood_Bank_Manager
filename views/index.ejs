@@ -5,27 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="/styles.css" rel="stylesheet">
 </head>
-<body class="flex items-center justify-center min-h-screen bg-purple-300">
-
-  <div class="w-full max-w-sm bg-white p-6 rounded-lg shadow-lg">
-    <h2 class="text-2xl font-bold text-center mb-4 text-purple-700">Login</h2>
-
-    <form action="/login" method="POST" class="space-y-4">
-      <div>
-        <input type="text" id="username" name="username" placeholder="Username" required
-          class="w-full p-2 border rounded-lg focus:ring focus:ring-purple-300">
-      </div>
-
-      <div>
-        <input type="password" id="password" name="password" placeholder="Password" required
-          class="w-full p-2 border rounded-lg focus:ring focus:ring-purple-300">
-      </div>
-
-      <button type="submit" class="w-full bg-purple-500 text-white py-2 rounded-lg hover:bg-purple-600">
-        Login
-      </button>
-    </form>
-  </div>
-
+<body class="bg-red-100 font-sans">
+    <div class="flex justify-center items-center h-screen">
+        <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+            <h1 class="text-2xl font-bold text-center text-red-600 mb-6">Blood Bank Manager</h1>
+            <p class="text-gray-600 text-center mb-4">Efficiently manage blood donations and requests.</p>
+            <form action="/login" method="POST" class="space-y-4">
+                <input type="text" name="username" placeholder="Username" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+                <input type="password" name="password" placeholder="Password" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+                <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700">Login</button>
+            </form>
+            <p class="text-center text-gray-600 mt-4">Need an account? <a href="/register" class="text-red-600 hover:underline">Sign Up</a></p>
+        </div>
+    </div>
 </body>
 </html>
