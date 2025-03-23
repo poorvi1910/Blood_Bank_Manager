@@ -23,4 +23,24 @@ router.post('/login',async(req,res)=>{
     }
 })
 
+router.get('/donor', async(req,res)=>{
+    try{
+        res.render(donor)
+    }
+    catch(err){
+        console.log(err);
+        res.sendStatus(500);
+    }
+})
+
+router.get('/reciever', async(req,res)=>{
+    try{
+        res.render(reciever)
+    }
+    catch(err){
+        console.log(err);
+        res.sendStatus(500);
+    }
+})
+
 module.exports=router;
