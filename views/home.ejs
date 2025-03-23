@@ -3,9 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Blood Bank Manager</title>
+    <link href="/styles.css" rel="stylesheet">
 </head>
-<body>
-    <h1>Home</h1>
+<body class="h-screen">
+    <div class="flex flex-col h-full">
+        <div class="bg-red-400 w-full h-30 p-3" >
+            <h1 class="text-white font-bold text-center text-3xl p-3">Welcome to Blood Bank Manager</h1>
+            <h3 class="text-gray-100 text-center text-m pb-1">Connecting donors and recievers </h3>
+        </div>
+    
+        <div class="flex flex-row justify-between bg-yellow-100 flex-grow">
+            <div class="flex flex-1 items-center justify-center">
+                <div class="flex flex-col bg-white h-[70%] w-[60%] shadow-lg rounded-lg items-center justify-center">
+                    <img src="/donator.png" alt="Donor" class="w-[40%] h-[40%] mb-4">
+                    <h3 class="text-xl mb-4">Are you a donor?</h3>
+                    <button class="text-lg bg-red-400 text-white p-2 rounded hover:bg-red-500">Donate</button>
+                </div>
+            </div>
+    
+            <div class="flex flex-1 items-center justify-center">
+                <div class="flex flex-col bg-white h-[70%] w-[60%] shadow-lg rounded-lg items-center justify-center">
+                    <img src="/receiver.jpg" alt="Reciever" class="w-[45%] h-[50%] mb-4">
+                    <h3 class="text-xl mb-4">Are you a reciever?</h3>
+                    <button class="text-lg bg-red-400 text-white p-2 rounded hover:bg-red-500">Receive</button>
+                </div>
+            </div>
+        </div> 
+    </div>
+    <footer class="bg-red-400 text-white text-center py-3 flex-none">
+        <p class="text-lg font-semibold">Contact Us</p>
+        <p>Email: support@bloodbankmanager.com</p>
+        <p>Phone: +1 (800) 555-1234</p>
+    </footer>
 </body>
 </html>
