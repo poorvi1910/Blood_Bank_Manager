@@ -6,9 +6,6 @@ const dbConfig = {
   connectString: "localhost:1521/XE"
 };
 
-// Configure default settings
-oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
-
 async function executeQuery(query, binds = {}, options = {}, returnConnection = false) {
     let connection;
     try {
