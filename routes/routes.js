@@ -2,25 +2,8 @@ const express=require('express');
 const router=express.Router();
 const { executeQuery } = require('../db/db');
 const oracledb = require('oracledb');
-
-async function createProcedure() {
-    const procQuery = `
-        CREATE OR REPLACE PROCEDURE GET_USERS(users OUT SYS_REFCURSOR) 
-        AS 
-        BEGIN 
-            OPEN users FOR 
-            SELECT ID, USERNAME, PASSWORD FROM users; 
-        END;
-    `;
-    
-    try {
-        await executeQuery(procQuery, {});
-        console.log("Stored Procedure 'GET_USERS' created successfully.");
-    } catch (err) {
-        console.error("Error creating stored procedure:", err);
-    }
-}
-createProcedure();
+const { initializeProcedures } = require('../db/procedures');
+initializeProcedures();
 
 router.get('/', (req, res)=>{
     res.render('index');
@@ -81,6 +64,10 @@ router.get('/receiver', async(req,res)=>{
         console.log(err);
         res.sendStatus(500);
     }
+})
+
+router.get('/admin', (req, res)=>{
+    res.render('admin');
 })
 
 router.post('/logout', (req, res) => {
