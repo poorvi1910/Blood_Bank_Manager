@@ -15,20 +15,6 @@
         </form>
     </nav>
     <div class="flex flex-col sm:flex-row justify-center bg-yellow-100 flex-grow">
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>Username</th>
-                <th>Password</th>
-            </tr>
-            <% users.forEach(user => { %>
-            <tr>
-                <td><%= user.ID %></td>
-                <td><%= user.USERNAME %></td>
-                <td><%= user.PASSWORD %></td>
-            </tr>
-            <% }); %>
-        </table>
     </div>
     <footer class="bg-red-600 text-white text-center py-3 flex-none">
         <p class="text-lg font-semibold">Contact Us</p>

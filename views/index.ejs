@@ -6,17 +6,31 @@
   <link href="/styles.css" rel="stylesheet">
 </head>
 <body class="bg-yellow-100 font-sans">
-    <div class="flex justify-center items-center h-screen">
-        <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-            <h1 class="text-2xl font-bold text-center text-red-600 mb-6">Blood Bank Manager</h1>
-            <p class="text-gray-600 text-center mb-4">Efficiently manage blood donations and requests.</p>
-            <form action="/login" method="POST" class="space-y-4">
-                <input type="text" name="username" placeholder="Username" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
-                <input type="password" name="password" placeholder="Password" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
-                <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700">Login</button>
-            </form>
-            <p class="text-center text-gray-600 mt-4">Need an account? <a href="/register" class="text-red-600 hover:underline">Sign Up</a></p>
-        </div>
+  <div class="flex justify-center items-center h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+      <h1 class="text-2xl font-bold text-center text-red-600 mb-6">Blood Bank Manager</h1>
+      <p class="text-gray-600 text-center mb-4">Efficiently manage blood donations and requests.</p>
+      
+      <form method="POST" class="space-y-4" onsubmit="updateAction(this)">
+        <select name="role" id="role" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <option value="donor">Donor</option>
+          <option value="admin">Admin</option>
+        </select>
+
+        <input type="text" name="name" placeholder="Username" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+        <input type="password" name="password" placeholder="Password" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+        <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700">Login</button>
+      </form>
+
+      <p class="text-center text-gray-600 mt-4">Need an account? <a href="/register" class="text-red-600 hover:underline">Sign Up</a></p>
     </div>
+  </div>
+
+  <script>
+    function updateAction(form) {
+      const role = form.querySelector('#role').value;
+      form.action = role === 'admin' ? '/admin-login' : '/login';
+    }
+  </script>
 </body>
 </html>

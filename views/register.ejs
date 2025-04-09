@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="/styles.css" rel="stylesheet">
+  <script>
+    function toggleForm(role) {
+      document.getElementById('userFields').style.display = role === 'user' ? 'block' : 'none';
+      document.getElementById('adminFields').style.display = role === 'admin' ? 'block' : 'none';
+    }
+  
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.querySelector('form');
+      form.addEventListener('submit', () => {
+        const hiddenUserFields = document.querySelectorAll('#userFields input, #userFields select');
+        const hiddenAdminFields = document.querySelectorAll('#adminFields input');
+  
+        if (document.getElementById('userFields').style.display === 'none') {
+          hiddenUserFields.forEach(field => field.disabled = true);
+        } else {
+          hiddenAdminFields.forEach(field => field.disabled = true);
+        }
+      });
+    });
+  </script>
+  
+</head>
+<body class="bg-yellow-100 font-sans">
+  <div class="flex justify-center items-center min-h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-lg max-w-xl w-full">
+      <h1 class="text-2xl font-bold text-center text-red-600 mb-6">Register</h1>
+      <form action="/register" method="POST" class="space-y-4">
+
+        <!-- Role selection -->
+        <div class="text-center">
+          <label class="font-semibold mr-4">Registering as:</label>
+          <label><input type="radio" name="role" value="user" onclick="toggleForm('user')"> User</label>
+          <label class="ml-4"><input type="radio" name="role" value="admin" onclick="toggleForm('admin')"> Admin</label>
+        </div>
+
+        <!-- User fields -->
+        <div id="userFields" class="space-y-2 hidden">
+          <input type="text" name="name" placeholder="Full Name" class="w-full p-2 border rounded-lg">
+          <input type="date" name="dob" placeholder="Date of Birth" class="w-full p-2 border rounded-lg">
+          <select name="gender" class="w-full p-2 border rounded-lg">
+            <option value="">Gender</option>
+            <option value="M">Male</option>
+            <option value="F">Female</option>
+          </select>
+          <input type="text" name="bloodGroup" placeholder="Blood Group" class="w-full p-2 border rounded-lg">
+          <input type="text" name="phone" placeholder="Phone Number" class="w-full p-2 border rounded-lg">
+          <input type="text" name="address" placeholder="Address" class="w-full p-2 border rounded-lg">
+          <input type="text" name="healthStatus" placeholder="Health Status" class="w-full p-2 border rounded-lg">
+          <input type="date" name="lastDonationDate" placeholder="Last Donation Date" class="w-full p-2 border rounded-lg">
+          <input type="number" name="weight" placeholder="Weight (kg)" class="w-full p-2 border rounded-lg">
+          <input type="password" name="password" placeholder="Create Password" class="w-full p-2 border rounded-lg">
+        </div>
+
+        <!-- Admin fields -->
+        <div id="adminFields" class="space-y-2 hidden">
+          <input type="text" name="name" placeholder="Full Name" class="w-full p-2 border rounded-lg">
+          <input type="text" name="bloodBankID" placeholder="Blood Bank ID" class="w-full p-2 border rounded-lg">
+          <input type="text" name="address" placeholder="Address" class="w-full p-2 border rounded-lg">
+          <input type="text" name="phone" placeholder="Phone Number" class="w-full p-2 border rounded-lg">
+          <input type="password" name="password" placeholder="Create Password" class="w-full p-2 border rounded-lg">
+        </div>
+
+        <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700">Register</button>
+      </form>
+      <p class="text-center text-gray-600 mt-4">Already have an account? <a href="/login" class="text-red-600 hover:underline">Login</a></p>
+    </div>
+  </div>
+</body>
+</html>
