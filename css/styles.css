@@ -181,9 +181,6 @@
   }
 }
 @layer utilities {
-  .visible {
-    visibility: visible;
-  }
   .mt-4 {
     margin-top: calc(var(--spacing) * 4);
   }

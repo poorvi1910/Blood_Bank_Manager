@@ -57,7 +57,7 @@ router.post('/login', async (req, res) => {
 
         const result = await executeQuery(query, binds);
         if (result.outBinds.is_valid === 1) {
-            res.render('donor'); // Redirect to donor dashboard
+            res.render('home'); // Redirect to donor dashboard
         } else {
             res.send("Invalid Donor Credentials");
         }
