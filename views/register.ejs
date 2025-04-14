@@ -4,71 +4,135 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="/styles.css" rel="stylesheet">
+  <title>Register - Blood Bank</title> <!-- Added title -->
   <script>
     function toggleForm(role) {
-      document.getElementById('userFields').style.display = role === 'user' ? 'block' : 'none';
-      document.getElementById('adminFields').style.display = role === 'admin' ? 'block' : 'none';
+      const userFields = document.getElementById('userFields');
+      const adminFields = document.getElementById('adminFields');
+      const allUserInputs = userFields.querySelectorAll('input, select');
+      const allAdminInputs = adminFields.querySelectorAll('input, select');
+
+      if (role === 'user') {
+        userFields.style.display = 'block';
+        adminFields.style.display = 'none';
+        allUserInputs.forEach(input => input.required = true); // Make user fields required
+        allAdminInputs.forEach(input => input.required = false); // Make admin fields not required
+      } else if (role === 'admin') {
+        userFields.style.display = 'none';
+        adminFields.style.display = 'block';
+        allUserInputs.forEach(input => input.required = false); // Make user fields not required
+        allAdminInputs.forEach(input => input.required = true); // Make admin fields required
+      }
+      // Adjust requirement for fields that might be optional
+      const lastDonationDateInput = document.querySelector('input[name="lastDonationDate"]');
+       if (lastDonationDateInput) lastDonationDateInput.required = false; // Last donation date might be optional for new donors
+
     }
-  
+
     document.addEventListener('DOMContentLoaded', () => {
+      // Set initial state based on checked radio (if any) or default to hidden
+      const checkedRole = document.querySelector('input[name="role"]:checked');
+      if (checkedRole) {
+        toggleForm(checkedRole.value);
+      } else {
+         document.getElementById('userFields').style.display = 'none';
+         document.getElementById('adminFields').style.display = 'none';
+      }
+
       const form = document.querySelector('form');
-      form.addEventListener('submit', () => {
-        const hiddenUserFields = document.querySelectorAll('#userFields input, #userFields select');
-        const hiddenAdminFields = document.querySelectorAll('#adminFields input');
-  
-        if (document.getElementById('userFields').style.display === 'none') {
+      form.addEventListener('submit', (event) => {
+        const userFieldsDiv = document.getElementById('userFields');
+        const adminFieldsDiv = document.getElementById('adminFields');
+        const hiddenUserFields = userFieldsDiv.querySelectorAll('input, select');
+        const hiddenAdminFields = adminFieldsDiv.querySelectorAll('input, select');
+
+        // Disable fields in the section that is *not* visible
+        // This prevents them from being submitted with the form
+        if (userFieldsDiv.style.display === 'none') {
           hiddenUserFields.forEach(field => field.disabled = true);
-        } else {
+          hiddenAdminFields.forEach(field => field.disabled = false); // Ensure visible fields are enabled
+        } else if (adminFieldsDiv.style.display === 'none') {
           hiddenAdminFields.forEach(field => field.disabled = true);
+          hiddenUserFields.forEach(field => field.disabled = false); // Ensure visible fields are enabled
+        } else {
+            // If neither is visible (initial state, should not happen on submit if validation is good)
+             event.preventDefault(); // Stop submission
+             alert("Please select a role (User or Admin).");
+             return;
         }
       });
+
+      // Add listener to radio buttons to toggle form and clear the *other* form's inputs
+      document.querySelectorAll('input[name="role"]').forEach(radio => {
+          radio.addEventListener('change', function() {
+              toggleForm(this.value);
+              // Optional: Clear inputs of the form that is now hidden
+              const formToClear = (this.value === 'user') ? '#adminFields' : '#userFields';
+              document.querySelectorAll(`${formToClear} input, ${formToClear} select`).forEach(input => {
+                  if (input.type === 'radio' || input.type === 'checkbox') {
+                      input.checked = false;
+                  } else if (input.tagName === 'SELECT') {
+                      input.selectedIndex = 0; // Reset select to the first option (usually placeholder)
+                  }
+                   else {
+                      input.value = '';
+                  }
+                  input.required = false; // Ensure cleared fields are not required
+                  input.disabled = false; // Re-enable field before potentially hiding it again
+              });
+          });
+      });
+
     });
   </script>
-  
+
 </head>
 <body class="bg-yellow-100 font-sans">
-  <div class="flex justify-center items-center min-h-screen">
+  <div class="flex justify-center items-center min-h-screen py-10"> <!-- Added padding -->
     <div class="bg-white p-8 rounded-lg shadow-lg max-w-xl w-full">
       <h1 class="text-2xl font-bold text-center text-red-600 mb-6">Register</h1>
       <form action="/register" method="POST" class="space-y-4">
 
         <!-- Role selection -->
-        <div class="text-center">
+        <div class="text-center mb-6"> <!-- Increased margin bottom -->
           <label class="font-semibold mr-4">Registering as:</label>
-          <label><input type="radio" name="role" value="user" onclick="toggleForm('user')"> User</label>
-          <label class="ml-4"><input type="radio" name="role" value="admin" onclick="toggleForm('admin')"> Admin</label>
+          <label class="cursor-pointer"><input type="radio" name="role" value="user" required class="mr-1"> User</label>
+          <label class="ml-4 cursor-pointer"><input type="radio" name="role" value="admin" required class="mr-1"> Admin</label>
         </div>
 
-        <!-- User fields -->
-        <div id="userFields" class="space-y-2 hidden">
-          <input type="text" name="name" placeholder="Full Name" class="w-full p-2 border rounded-lg">
-          <input type="date" name="dob" placeholder="Date of Birth" class="w-full p-2 border rounded-lg">
-          <select name="gender" class="w-full p-2 border rounded-lg">
-            <option value="">Gender</option>
+        <!-- User/Donor fields -->
+        <!-- Names match the procedure parameters which will map to DB columns -->
+        <div id="userFields" class="space-y-3" style="display: none;"> <!-- Default hidden, increased spacing -->
+          <input type="text" name="d_name" placeholder="Full Name (Donor)" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <input type="date" name="d_dob" placeholder="Date of Birth" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" title="Date of Birth">
+          <select name="d_gender" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+            <option value="" disabled selected>Select Gender...</option>
             <option value="M">Male</option>
             <option value="F">Female</option>
           </select>
-          <input type="text" name="bloodGroup" placeholder="Blood Group" class="w-full p-2 border rounded-lg">
-          <input type="text" name="phone" placeholder="Phone Number" class="w-full p-2 border rounded-lg">
-          <input type="text" name="address" placeholder="Address" class="w-full p-2 border rounded-lg">
-          <input type="text" name="healthStatus" placeholder="Health Status" class="w-full p-2 border rounded-lg">
-          <input type="date" name="lastDonationDate" placeholder="Last Donation Date" class="w-full p-2 border rounded-lg">
-          <input type="number" name="weight" placeholder="Weight (kg)" class="w-full p-2 border rounded-lg">
-          <input type="password" name="password" placeholder="Create Password" class="w-full p-2 border rounded-lg">
+          <input type="text" name="d_bloodGroup" placeholder="Blood Group (e.g., A+, O-)" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <input type="text" name="d_phoneNo" placeholder="Phone Number (10 digits)" pattern="\d{10}" title="Enter 10 digit phone number" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <input type="text" name="d_address" placeholder="Address" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <input type="text" name="healthStatus" placeholder="Health Status (e.g., Good)" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <input type="date" name="lastDonationDate" placeholder="Last Donation Date (Optional)" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" title="Last Donation Date (Leave blank if never donated)">
+          <input type="number" name="weight" placeholder="Weight (kg)" step="0.1" min="45" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" title="Weight in Kilograms (Minimum 45kg)">
+          <input type="password" name="password" placeholder="Create Password" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
         </div>
 
         <!-- Admin fields -->
-        <div id="adminFields" class="space-y-2 hidden">
-          <input type="text" name="name" placeholder="Full Name" class="w-full p-2 border rounded-lg">
-          <input type="text" name="bloodBankID" placeholder="Blood Bank ID" class="w-full p-2 border rounded-lg">
-          <input type="text" name="address" placeholder="Address" class="w-full p-2 border rounded-lg">
-          <input type="text" name="phone" placeholder="Phone Number" class="w-full p-2 border rounded-lg">
-          <input type="password" name="password" placeholder="Create Password" class="w-full p-2 border rounded-lg">
+        <!-- Names match the procedure parameters which will map to DB columns -->
+        <div id="adminFields" class="space-y-3" style="display: none;"> <!-- Default hidden, increased spacing -->
+          <input type="text" name="a_name" placeholder="Full Name (Admin)" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <!-- Assuming BloodBankID needs to be entered manually. In a real app, this might be a dropdown -->
+          <input type="number" name="bloodBankID" placeholder="Blood Bank ID" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" title="Numeric ID of the associated Blood Bank">
+          <input type="text" name="a_address" placeholder="Address" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <input type="text" name="a_phoneNo" placeholder="Phone Number (10 digits)" pattern="\d{10}" title="Enter 10 digit phone number" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+          <input type="password" name="password" placeholder="Create Password" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
         </div>
 
-        <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700">Register</button>
+        <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 mt-6">Register</button> <!-- Added margin top -->
       </form>
-      <p class="text-center text-gray-600 mt-4">Already have an account? <a href="/login" class="text-red-600 hover:underline">Login</a></p>
+      <p class="text-center text-gray-600 mt-4">Already have an account? <a href="/" class="text-red-600 hover:underline">Login</a></p> <!-- Changed link to / -->
     </div>
   </div>
 </body>

@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel</title>
+    <title>Donor</title>
     <link href="/styles.css" rel="stylesheet">
 </head>
-<body class="bg-yellow-100">
+<body class="h-screen flex flex-col bg-yellow-100">
     <nav class="flex items-center bg-red-600 p-6 justify-end">
         <form method="post" action="/logout">
             <button type="submit" class="bg-red-600 text-red-100 hover:bg-white hover:text-red-400 rounded mr-4 px-4 py-2">
@@ -14,5 +14,12 @@
             </button>
         </form>
     </nav>
+    <div class="flex flex-col sm:flex-row justify-center bg-yellow-100 flex-grow">
+    </div>
+    <footer class="bg-red-600 text-white text-center py-3 flex-none">
+        <p class="text-lg font-semibold">Contact Us</p>
+        <p>Email: support@bloodbankmanager.com</p>
+        <p>Phone: +1 (800) 555-1234</p>
+    </footer>
 </body>
 </html>
