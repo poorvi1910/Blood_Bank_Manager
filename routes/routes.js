@@ -1,10 +1,14 @@
+// routes.js
 const express = require('express');
 const router = express.Router();
 const { executeQuery } = require('../db/db');
 const oracledb = require('oracledb');
 const { initializeProcedures } = require('../db/procedures');
-
 initializeProcedures();
+
+function getLoggedInDonorId(req) {
+    return 1;
+}
 
 router.get('/', (req, res) => {
     res.render('index');
@@ -21,103 +25,69 @@ router.post('/register', async (req, res) => {
         return res.status(400).send("Role (user or admin) is required.");
     }
     if (role !== 'user' && role !== 'admin') {
-         return res.status(400).send("Invalid role specified.");
+        return res.status(400).send("Invalid role specified.");
     }
 
     try {
         if (role === 'user') {
-            // Extract fields based on the names used in register.ejs for userFields
             const { d_name, d_dob, d_gender, d_bloodGroup, d_phoneNo, d_address, healthStatus, lastDonationDate, weight, password } = req.body;
-
-            // Validate required fields explicitly on server-side as well
             if (!d_name || !d_dob || !d_gender || !d_bloodGroup || !d_phoneNo || !d_address || !healthStatus || !weight || !password) {
-                 return res.status(400).send("Missing required donor information.");
+                return res.status(400).send("Missing required donor information.");
             }
-
             const query = `BEGIN REGISTER_DONOR(:d_name, :d_phoneNo, :password, :d_dob, :d_gender, :d_bloodGroup, :d_address, :healthStatus, :lastDonationDate, :weight); END;`;
             const binds = {
-                d_name,
-                d_phoneNo,
-                password, // Pass password directly (consider hashing!)
-                d_dob, // Should be in 'YYYY-MM-DD' format from <input type="date">
-                d_gender,
-                d_bloodGroup,
-                d_address,
-                healthStatus,
-                lastDonationDate: lastDonationDate || null, // Handle optional date - pass null if empty
-                weight: parseFloat(weight) // Ensure weight is a number
-             };
-
-            console.log("Registering donor with:", binds); // Be cautious logging passwords even during dev
+                d_name, d_phoneNo, password, d_dob, d_gender, d_bloodGroup, d_address, healthStatus,
+                lastDonationDate: lastDonationDate || null,
+                weight: parseFloat(weight)
+            };
             await executeQuery(query, binds);
             console.log("Donor registered successfully.");
-            res.redirect('/'); // Redirect to login page after successful registration
+            res.redirect('/');
 
         } else if (role === 'admin') {
-            // Extract fields based on the names used in register.ejs for adminFields
             const { a_name, bloodBankID, a_address, a_phoneNo, password } = req.body;
-
-             // Validate required fields
             if (!a_name || !bloodBankID || !a_address || !a_phoneNo || !password) {
-                 return res.status(400).send("Missing required admin information.");
+                return res.status(400).send("Missing required admin information.");
             }
-
             const query = `BEGIN REGISTER_ADMIN(:a_name, :bloodBankID, :a_address, :a_phoneNo, :password); END;`;
             const binds = {
-                a_name,
-                bloodBankID: parseInt(bloodBankID, 10), // Ensure BloodBankID is a number
-                a_address,
-                a_phoneNo,
-                password // Pass password directly (consider hashing!)
+                a_name, bloodBankID: parseInt(bloodBankID, 10), a_address, a_phoneNo, password
             };
-            console.log("Registering admin with:", binds); // Be cautious logging passwords
             await executeQuery(query, binds);
             console.log("Admin registered successfully.");
-            res.redirect('/'); // Redirect to login page
+            res.redirect('/');
         }
-        // No else needed due to prior validation
 
     } catch (err) {
         console.error("Registration Error:", err);
-        // Provide more specific feedback if possible (e.g., check for unique constraint errors)
-        if (err.errorNum === 1) { // ORA-00001: unique constraint violated
-             res.status(409).send("Registration failed. A user or admin with some of these details (e.g., phone, name) might already exist.");
-        } else if (err.errorNum === 2291) { // ORA-02291: integrity constraint violated - parent key not found (e.g., invalid BloodBankID)
-             res.status(400).send("Registration failed. Invalid data provided (e.g., the specified Blood Bank ID does not exist).");
-        }
-         else {
-             res.status(500).send("Registration failed due to a server error. Please try again later.");
+        if (err.errorNum === 1) {
+            res.status(409).send("Registration failed. A user or admin with some of these details (e.g., phone, name) might already exist.");
+        } else if (err.errorNum === 2291) {
+            res.status(400).send("Registration failed. Invalid data provided (e.g., the specified Blood Bank ID does not exist).");
+        } else {
+            res.status(500).send("Registration failed due to a server error. Please try again later.");
         }
     }
 });
 
-// Donor Login
 router.post('/login', async (req, res) => {
-    // 'name' comes from the form input name="name"
     const { name, password } = req.body;
-
-     if (!name || !password) {
+    if (!name || !password) {
         return res.status(400).send("Username and Password are required.");
     }
-
     try {
         const query = `BEGIN LOGIN_DONOR(:d_name, :password, :is_valid); END;`;
         const binds = {
-            d_name: name, // Map form 'name' to procedure parameter p_d_name
-            password: password,
+            d_name: name, password: password,
             is_valid: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
         };
-
         const result = await executeQuery(query, binds);
         if (result.outBinds && result.outBinds.is_valid === 1) {
-            // Add session logic here if needed
             console.log(`Donor login successful: ${name}`);
-            res.render('home'); // Redirect to donor dashboard/page
+            res.render('home'); 
         } else {
             console.log(`Donor login failed: ${name}`);
-            // Send back to login with an error message (more user-friendly)
-            // For now, just sending text
-             res.status(401).send("Invalid Donor Credentials");
+             res.render('index', { loginError: 'Invalid Donor Credentials' }); 
         }
     } catch (err) {
         console.error("Donor Login Error:", err);
@@ -125,32 +95,24 @@ router.post('/login', async (req, res) => {
     }
 });
 
-
-// Admin Login
 router.post('/admin-login', async (req, res) => {
-    // 'name' comes from the form input name="name"
     const { name, password } = req.body;
-
     if (!name || !password) {
         return res.status(400).send("Username and Password are required.");
     }
-
     try {
         const query = `BEGIN LOGIN_ADMIN(:a_name, :password, :is_valid); END;`;
         const binds = {
-            a_name: name, // Map form 'name' to procedure parameter p_a_name
-            password: password,
+            a_name: name, password: password,
             is_valid: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
         };
-
         const result = await executeQuery(query, binds);
         if (result.outBinds && result.outBinds.is_valid === 1) {
-            // Add session logic here if needed
             console.log(`Admin login successful: ${name}`);
-            res.render('admin'); // Render admin dashboard
+            res.redirect('/admin');
         } else {
-             console.log(`Admin login failed: ${name}`);
-             res.status(401).send("Invalid Admin Credentials");
+            console.log(`Admin login failed: ${name}`);
+             res.render('index', { adminLoginError: 'Invalid Admin Credentials' }); 
         }
     } catch (err) {
         console.error("Admin Login Error:", err);
@@ -158,15 +120,45 @@ router.post('/admin-login', async (req, res) => {
     }
 });
 
-
-router.get('/donor', async (req, res) => {
+router.get('/donor', async (req, res) => { 
     try {
-        res.render('donor');
+        const eventQuery = `SELECT EventID, EventName, Location, EventDate, E_PhoneNo FROM DonationEvents ORDER BY EventDate DESC`;
+        const eventResult = await executeQuery(eventQuery, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }); 
+        const events = eventResult.rows.map(event => ({
+            ...event,
+            EVENTDATE: event.EVENTDATE ? new Date(event.EVENTDATE).toLocaleDateString() : 'N/A' 
+        }));
+        res.render('donor', { events: events });
+
     } catch (err) {
-        console.error(err);
-        res.sendStatus(500);
+        console.error("Error fetching donor page data:", err);
+        res.status(500).send("Error loading donor page.");
     }
 });
+
+router.post('/donor/donate-event', async (req, res) => {
+    const { eventId, units } = req.body;
+    const donorId = getLoggedInDonorId(req); 
+
+    if (!eventId || !units || !donorId) {
+        return res.status(400).json({ success: false, message: 'Missing event ID, units, or donor information.' });
+    }
+
+    const unitsDonated = parseInt(units, 10);
+    if (isNaN(unitsDonated) || unitsDonated <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid number of units specified.' });
+    }
+
+    try {
+        console.log(`Received donation intent: DonorID ${donorId}, EventID ${eventId}, Units ${unitsDonated}`);
+        res.json({ success: true, message: 'Donation submitted successfully!' });
+
+    } catch (err) {
+        console.error("Error processing donation submission:", err);
+        res.status(500).json({ success: false, message: 'Server error processing donation.' });
+    }
+});
+
 
 router.get('/receiver', async (req, res) => {
     try {
@@ -178,28 +170,12 @@ router.get('/receiver', async (req, res) => {
 });
 
 router.get('/admin', (req, res) => {
-    // Add authentication check here (e.g., check session)
-    // Fetch admin-specific data if needed
-    res.render('admin'); // Assuming admin.ejs exists
+    res.render('admin'); 
 });
 
-// Basic logout (requires session middleware like express-session)
 router.post('/logout', (req, res) => {
-    // if (req.session) {
-    //     req.session.destroy(err => {
-    //         if (err) {
-    //             console.error("Session destruction error:", err);
-    //             return res.status(500).send("Could not log out.");
-    //         } else {
-    //              console.log('User logged out');
-    //              res.redirect('/');
-    //         }
-    //     });
-    // } else {
-    //      res.redirect('/'); // No session to destroy
-    // }
      console.log('Logout requested (session handling not fully implemented)');
-     res.redirect('/'); // Simple redirect for now
+     res.redirect('/'); 
 });
 
 module.exports = router;
