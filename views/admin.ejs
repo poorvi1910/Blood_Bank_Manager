@@ -3,19 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Donor</title>
+    <title>Blood Bank Manager</title>
     <link href="/styles.css" rel="stylesheet">
 </head>
-<body class="h-screen flex flex-col bg-yellow-100">
-    <nav class="flex items-center bg-red-600 p-6 justify-end">
-        <form method="post" action="/logout">
-            <button type="submit" class="bg-red-600 text-red-100 hover:bg-white hover:text-red-400 rounded mr-4 px-4 py-2">
-                Logout
-            </button>
-        </form>
-    </nav>
-    <div class="flex flex-col sm:flex-row justify-center bg-yellow-100 flex-grow">
+<body class="h-screen flex flex-col">
+    <div class="bg-red-600 w-full p-3" >
+        <h1 class="text-white font-bold text-center text-2xl sm:text-3xl">Welcome to Blood Bank Manager</h1>
+        <h3 class="text-gray-100 text-center text-sm sm:text-base">Connecting donors and recievers </h3>
     </div>
+
+    <div class="flex flex-col sm:flex-row justify-center bg-yellow-100 flex-grow">
+        <div class="flex flex-1 items-center justify-center">
+            <div class="flex flex-col bg-white h-[70%] w-[60%] shadow-lg rounded-lg items-center justify-center">
+                <img src="/donator.png" alt="Donor" class="w-[40%] h-[40%] mb-4">
+                
+                <button class="text-lg bg-red-600 text-white p-2 rounded hover:bg-red-700 w-full sm:w-auto" onclick="window.location.href='/admindonor'">Donation Requests</button>
+            </div>
+        </div>
+
+        <div class="flex flex-1 items-center justify-center">
+            <div class="flex flex-col bg-white h-[70%] w-[60%] shadow-lg rounded-lg items-center justify-center">
+                <img src="/receiver.jpg" alt="Reciever" class="w-[45%] h-[50%] mb-4">
+                
+                <button class="text-lg bg-red-600 text-white p-2 rounded hover:bg-red-700 w-full sm:w-auto" onclick="window.location.href='/receiver'">Receival Requests</button>
+            </div>
+        </div>
+    </div>
+    
     <footer class="bg-red-600 text-white text-center py-3 flex-none">
         <p class="text-lg font-semibold">Contact Us</p>
         <p>Email: support@bloodbankmanager.com</p>

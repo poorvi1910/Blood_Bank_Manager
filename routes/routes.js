@@ -159,6 +159,38 @@ router.post('/donor/donate-event', async (req, res) => {
     }
 });
 
+router.get('/admindonor', async (req, res) => {
+    try {
+        const directDonationsQuery = `
+            SELECT * FROM DonationInfo d
+            JOIN Donors do ON d.DONATIONID = do.DONATIONID
+            WHERE d.EventID IS NULL
+        `;
+
+        const eventDonationsQuery = `
+            SELECT * FROM DonationInfo d
+            JOIN Donors do ON d.DONATIONID = do.DONATIONID
+            WHERE d.EventID IS NOT NULL
+        `;
+
+        const [directResult, eventResult] = await Promise.all([
+            executeQuery(directDonationsQuery, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
+            executeQuery(eventDonationsQuery, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
+        ]);
+        
+
+        res.render('admindonor', {
+            directDonations: directResult.rows,
+            eventDonations: eventResult.rows
+        });
+    } catch (err) {
+        console.error("Error loading admin donor requests:", err);
+        res.status(500).send("Failed to load donation requests.");
+    }
+});
+
+
+
 
 router.get('/receiver', async (req, res) => {
     try {
@@ -177,5 +209,33 @@ router.post('/logout', (req, res) => {
      console.log('Logout requested (session handling not fully implemented)');
      res.redirect('/'); 
 });
+router.post('/admin/review-donation', async (req, res) => {
+    const { donationId, action } = req.body;
+
+    try {
+        if (action === 'reject') {
+            console.log('Donation ID:', donationId); // For debugging
+
+            // Add this SELECT query for verification
+            const checkResult = await executeQuery(
+                `SELECT * FROM DonationInfo WHERE DONATIONID = :id`,
+                [donationId],
+                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            );
+            console.log('Check Result:', checkResult.rows);
+
+            const result = await executeQuery(`DELETE FROM DonationInfo WHERE DONATIONID = :id`, [donationId]);
+            console.log('Delete Result:', result); // Check how many rows were affected
+
+            await executeQuery(`COMMIT`);
+        }
+        // 'accept' case can update status if you want, or do nothing
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error handling review:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
 
 module.exports = router;
