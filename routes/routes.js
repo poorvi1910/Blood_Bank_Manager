@@ -6,6 +6,27 @@ const oracledb = require('oracledb');
 const { initializeProcedures } = require('../db/procedures');
 initializeProcedures();
 
+async function initializePool() {
+    try {
+      await oracledb.createPool({
+        user: "C##user1",
+        password: "pass1",
+        connectString: "localhost:1521/XE", // e.g., "localhost/XE"
+        poolAlias: "default", // Important: Set the alias to "default" if that's what your code expects
+        poolMin: 5,
+        poolMax: 10,
+        poolIncrement: 1
+        // ... other pool options
+      });
+      console.log('Oracle connection pool initialized.');
+    } catch (err) {
+      console.error('Error initializing Oracle connection pool:', err);
+      process.exit(1); // Exit the application if pool creation fails
+    }
+  }
+
+  initializePool();
+  
 function getLoggedInDonorId(req) {
     return 1;
 }
@@ -127,6 +148,7 @@ router.post('/admin-login', async (req, res) => {
                // In your /admin-login route, after setting the session
               req.session.adminBloodBankId = bloodBankId; // Already exists
               console.log("Blood Bank ID set in session:", req.session.adminBloodBankId);
+              
 
 
             
@@ -219,6 +241,205 @@ router.get('/admindonor', async (req, res) => {
     }
 });
 
+
+router.get('/adminreceiver', async (req, res) => {
+    try {
+        const bloodBankId = req.session.adminBloodBankId;
+        if (!bloodBankId) {
+            return res.status(403).send("Unauthorized access: no blood bank ID in session.");
+        }
+
+        const receivalRequestsQuery = `
+            SELECT r.RECIPIENTID, r.R_NAME, r.R_DOB, r.R_GENDER, r.R_BLOODGROUP,
+                   r.R_PHONENO, r.R_ADDRESS, r.REASONFORREQUEST, r.SEVERITY,
+                   r.REQUIREDUNITS
+            FROM RECIPIENTS r
+            LEFT JOIN RECEIVINGINFO ri ON r.RECEIVALID = ri.RECEIVALID
+            WHERE ri.BLOODBANKID = :bbid OR ri.BLOODBANKID IS NULL
+        `;
+
+        const result = await executeQuery(
+            receivalRequestsQuery,
+            { bbid: bloodBankId },
+            { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+
+        console.log("Receival Requests:", result.rows);
+
+        res.render('adminreceiver', {
+            receivalRequests: result.rows
+        });
+
+    } catch (err) {
+        console.error("Error loading receival requests:", err);
+        res.status(500).send("Failed to load receival requests.");
+    }
+});
+
+
+router.post('/admin/check-inventory', async (req, res) => {
+    const { recipientID, requiredUnits, recipientBloodGroup } = req.body;
+    console.log("Received body:", req.body);
+
+    const bloodBankId = req.session.adminBloodBankId;
+    console.log("Blood bank ID in session:", bloodBankId);
+
+    if (!bloodBankId) {
+      return res.status(403).send("Unauthorized: no blood bank ID in session.");
+    }
+  
+    // Blood compatibility mapping
+    const compatible = {
+      'O-': ['O-','O+','A-','A+','B-','B+','AB-','AB+'],
+      'O+': ['O+','A+','B+','AB+'],
+      'A-': ['A-','A+','AB-','AB+'],
+      'A+': ['A+','AB+'],
+      'B-': ['B-','B+','AB-','AB+'],
+      'B+': ['B+','AB+'],
+      'AB-':['AB-','AB+'],
+      'AB+':['AB+']
+    };
+    const compatibleTypes = Object.entries(compatible)
+     .filter(([donorType, canDonateTo]) => canDonateTo.includes(recipientBloodGroup))
+      .map(([donorType]) => donorType);
+
+    if (!compatibleTypes.length) {
+      return res.status(400).send("Invalid blood group.");
+    }
+  
+    try {
+      const sql = `
+        SELECT do.DONORID,
+               do.D_BloodGroup AS BLOODGROUP,
+               d.UNITSDONATED
+        FROM DonationInfo d
+        JOIN Donors do
+          ON d.DONATIONID = do.DONATIONID
+        WHERE d.BLOODBANKID = :bbid
+          AND do.D_BloodGroup IN (${ compatibleTypes.map(t => `'${t}'`).join(',') })
+          AND d.UNITSDONATED >= :reqUnits
+      `;
+      const binds = { bbid: bloodBankId, reqUnits: Number(requiredUnits) };
+  
+      const result = await executeQuery(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+      console.log("Inventory check result:", result.rows);
+  
+      if (result.rows.length > 0) {
+        res.json({ success: true, message: "At least one donor has sufficient compatible units." });
+      } else {
+        res.json({ success: false, message: "No single donor has enough compatible units." });
+      }
+    } catch (err) {
+      console.error("Error in check-inventory:", err);
+      res.status(500).send("Internal server error: " + err.message);
+
+    }
+  });
+
+  router.post('/admin/review-receival', async (req, res) => {
+    const { recipientId, action } = req.body;       // <-- camelCase
+    const bloodBankId = req.session.adminBloodBankId;
+    console.log("Receival Review Request ->", { recipientId, action, bloodBankId });
+  
+    if (!recipientId || !action || !bloodBankId) {
+      return res.status(400).json({ success: false, message: 'Missing required information.' });
+    }
+  
+    try {
+      // 1) Get recipient info
+      const recipientQuery = `
+        SELECT RECIPIENTID, R_BLOODGROUP, REQUIREDUNITS
+        FROM RECIPIENTS
+        WHERE RECIPIENTID = :recipientId
+      `;
+      const recipientResult = await executeQuery(
+        recipientQuery,
+        { recipientId },                // <-- use the same name here
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const recipient = recipientResult.rows[0];
+      if (!recipient) {
+        return res.json({ success: false, message: 'Recipient not found.' });
+      }
+  
+      if (action === 'reject') {
+        return res.json({ success: true, message: 'Request rejected.' });
+      }
+  
+      // 2) Find a matching donor (example for one donor; you can extend to multiple)
+      const compatibleMap = {
+        'O-': ['O-'],  'O+': ['O-','O+'],  'A-': ['O-','A-'],
+        'A+': ['O-','O+','A-','A+'],  'B-': ['O-','B-'],
+        'B+': ['O-','O+','B-','B+'],  'AB-':['O-','A-','B-','AB-'],
+        'AB+':['O-','O+','A-','A+','B-','B+','AB-','AB+']
+      };
+      const compatibleTypes = compatibleMap[recipient.R_BLOODGROUP] || [];
+  
+      const donationQuery = `
+        SELECT d.DONATIONID, d.UNITSDONATED
+        FROM DONATIONINFO d
+        JOIN DONORS do ON d.DONATIONID = do.DONATIONID
+        WHERE d.BLOODBANKID = :bbid
+          AND do.D_BLOODGROUP IN (${compatibleTypes.map((_,i)=>`:b${i}`).join(',')})
+          AND d.UNITSDONATED >= :reqUnits
+        FETCH FIRST 1 ROWS ONLY
+      `;
+      const binds = Object.assign(
+        { bbid: bloodBankId, reqUnits: recipient.REQUIREDUNITS },
+        Object.fromEntries(compatibleTypes.map((t,i)=>[`b${i}`, t]))
+      );
+      const donationResult = await executeQuery(donationQuery, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+      const donorMatch = donationResult.rows[0];
+      if (!donorMatch) {
+        return res.json({ success: false, message: 'No suitable donor found.' });
+      }
+  
+      // 3) Start transaction: deduct & insert
+      const connection = await oracledb.getConnection("default");
+      try {
+        
+  
+        // Deduct from donor
+        await connection.execute(
+          `UPDATE DONATIONINFO
+           SET UNITSDONATED = UNITSDONATED - :used
+           WHERE DONATIONID = :id`,
+          { used: recipient.REQUIREDUNITS, id: donorMatch.DONATIONID }
+        );
+  
+        // Insert into RECEIVINGINFO (new SEQ for RECEIVALID)
+        await connection.execute(
+          `INSERT INTO RECEIVINGINFO (
+             RECEIVALID, BLOODBANKID,
+             UNITSRECEIVED, RECEIVALDATE
+           ) VALUES (
+             RECEIVAL_SEQ.NEXTVAL, :bbid, :units, SYSDATE
+           )`,
+          {
+            bbid: bloodBankId,
+            
+            units: recipient.REQUIREDUNITS
+            
+          }
+        );
+  
+        await connection.execute('COMMIT');
+        await connection.close();
+        return res.json({ success: true, message: 'Request accepted and units allocated.' });
+  
+      } catch (errTx) {
+        await connection.execute('ROLLBACK');
+        await connection.close();
+        console.error('Transaction error:', errTx);
+        return res.json({ success: false, message: 'Transaction failed.' });
+      }
+  
+    } catch (err) {
+      console.error('Review error:', err);
+      return res.status(500).json({ success: false, message: 'Server error during review.' });
+    }
+  });
+  
 
 
 
