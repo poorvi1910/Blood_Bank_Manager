@@ -213,13 +213,13 @@ router.get('/admindonor', async (req, res) => {
 
         const directDonationsQuery = `
             SELECT * FROM DonationInfo d
-            JOIN Donors do ON d.DONATIONID = do.DONATIONID
+            JOIN Donors do ON d.donorid = do.donorid
             WHERE d.EventID IS NULL AND d.BloodBankID = :bbid
         `;
 
         const eventDonationsQuery = `
             SELECT * FROM DonationInfo d
-            JOIN Donors do ON d.DONATIONID = do.DONATIONID
+            JOIN Donors do ON d.donorid = do.donorid
             WHERE d.EventID IS NOT NULL AND d.BloodBankID = :bbid
         `;
 
@@ -254,13 +254,12 @@ router.get('/adminreceiver', async (req, res) => {
                    r.R_PHONENO, r.R_ADDRESS, r.REASONFORREQUEST, r.SEVERITY,
                    r.REQUIREDUNITS
             FROM RECIPIENTS r
-            LEFT JOIN RECEIVINGINFO ri ON r.RECEIVALID = ri.RECEIVALID
-            WHERE ri.BLOODBANKID = :bbid OR ri.BLOODBANKID IS NULL
+           
         `;
 
         const result = await executeQuery(
             receivalRequestsQuery,
-            { bbid: bloodBankId },
+            {},
             { outFormat: oracledb.OUT_FORMAT_OBJECT }
         );
 
@@ -314,7 +313,7 @@ router.post('/admin/check-inventory', async (req, res) => {
                d.UNITSDONATED
         FROM DonationInfo d
         JOIN Donors do
-          ON d.DONATIONID = do.DONATIONID
+          ON d.DonorID = do.DonorID
         WHERE d.BLOODBANKID = :bbid
           AND do.D_BloodGroup IN (${ compatibleTypes.map(t => `'${t}'`).join(',') })
           AND d.UNITSDONATED >= :reqUnits
@@ -378,7 +377,7 @@ router.post('/admin/check-inventory', async (req, res) => {
       const donationQuery = `
         SELECT d.DONATIONID, d.UNITSDONATED
         FROM DONATIONINFO d
-        JOIN DONORS do ON d.DONATIONID = do.DONATIONID
+        JOIN DONORS do ON d.donorid = do.donorid
         WHERE d.BLOODBANKID = :bbid
           AND do.D_BLOODGROUP IN (${compatibleTypes.map((_,i)=>`:b${i}`).join(',')})
           AND d.UNITSDONATED >= :reqUnits
@@ -410,12 +409,13 @@ router.post('/admin/check-inventory', async (req, res) => {
         // Insert into RECEIVINGINFO (new SEQ for RECEIVALID)
         await connection.execute(
           `INSERT INTO RECEIVINGINFO (
-             RECEIVALID, BLOODBANKID,
+             RECEIVALID,RECIPIENTID,BLOODBANKID,
              UNITSRECEIVED, RECEIVALDATE
            ) VALUES (
-             RECEIVAL_SEQ.NEXTVAL, :bbid, :units, SYSDATE
+             RECEIVAL_SEQ.NEXTVAL,:recipientId, :bbid, :units, SYSDATE
            )`,
           {
+            recipientId: recipientId,
             bbid: bloodBankId,
             
             units: recipient.REQUIREDUNITS
