@@ -108,9 +108,32 @@ router.post('/admin-login', async (req, res) => {
         };
         const result = await executeQuery(query, binds);
         if (result.outBinds && result.outBinds.is_valid === 1) {
-            console.log(`Admin login successful: ${name}`);
-            res.redirect('/admin');
-        } else {
+             
+                console.log(`Admin login successful: ${name}`);
+                
+                // Fetch BloodBankID of this admin
+                const bloodBankResult = await executeQuery(
+                    `SELECT BloodBankID FROM Administrators WHERE A_Name = :name`,
+                    [name],
+                    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+                );
+                
+                const bloodBankId = bloodBankResult.rows[0]?.BLOODBANKID;
+                if (!bloodBankId) {
+                    return res.status(500).send("Could not find Blood Bank ID for admin.");
+                }
+            
+                // Simulating session with global (replace with session or jwt ideally)
+               // In your /admin-login route, after setting the session
+              req.session.adminBloodBankId = bloodBankId; // Already exists
+              console.log("Blood Bank ID set in session:", req.session.adminBloodBankId);
+
+
+            
+                res.redirect('/admin');
+            }
+            
+         else {
             console.log(`Admin login failed: ${name}`);
              res.render('index', { adminLoginError: 'Invalid Admin Credentials' }); 
         }
@@ -161,23 +184,30 @@ router.post('/donor/donate-event', async (req, res) => {
 
 router.get('/admindonor', async (req, res) => {
     try {
+        const bloodBankId = req.session.adminBloodBankId;
+        if (!bloodBankId) {
+            return res.status(403).send("Unauthorized access: no blood bank ID in session.");
+        }
+
         const directDonationsQuery = `
             SELECT * FROM DonationInfo d
             JOIN Donors do ON d.DONATIONID = do.DONATIONID
-            WHERE d.EventID IS NULL
+            WHERE d.EventID IS NULL AND d.BloodBankID = :bbid
         `;
 
         const eventDonationsQuery = `
             SELECT * FROM DonationInfo d
             JOIN Donors do ON d.DONATIONID = do.DONATIONID
-            WHERE d.EventID IS NOT NULL
+            WHERE d.EventID IS NOT NULL AND d.BloodBankID = :bbid
         `;
 
         const [directResult, eventResult] = await Promise.all([
-            executeQuery(directDonationsQuery, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
-            executeQuery(eventDonationsQuery, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
+            executeQuery(directDonationsQuery, { bbid: bloodBankId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
+            executeQuery(eventDonationsQuery, { bbid: bloodBankId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
         ]);
-        
+
+        console.log("Direct Donations:", directResult.rows);
+        console.log("Event Donations:", eventResult.rows);
 
         res.render('admindonor', {
             directDonations: directResult.rows,
@@ -188,6 +218,7 @@ router.get('/admindonor', async (req, res) => {
         res.status(500).send("Failed to load donation requests.");
     }
 });
+
 
 
 
@@ -214,28 +245,26 @@ router.post('/admin/review-donation', async (req, res) => {
 
     try {
         if (action === 'reject') {
-            console.log('Donation ID:', donationId); // For debugging
+            console.log('Deleting Donation ID:', donationId);
 
-            // Add this SELECT query for verification
-            const checkResult = await executeQuery(
-                `SELECT * FROM DonationInfo WHERE DONATIONID = :id`,
-                [donationId],
-                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            const result = await executeQuery(
+                `DELETE FROM DonationInfo WHERE DONATIONID = :id`,
+                { id: donationId },
+                { autoCommit: true }  // this will commit immediately
             );
-            console.log('Check Result:', checkResult.rows);
 
-            const result = await executeQuery(`DELETE FROM DonationInfo WHERE DONATIONID = :id`, [donationId]);
-            console.log('Delete Result:', result); // Check how many rows were affected
-
-            await executeQuery(`COMMIT`);
+            console.log('Rows deleted:', result.rowsAffected);
         }
-        // 'accept' case can update status if you want, or do nothing
+
+        // You can add handling for "accept" action here if needed
         res.json({ success: true });
+
     } catch (err) {
         console.error('Error handling review:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
+
 
 
 module.exports = router;
