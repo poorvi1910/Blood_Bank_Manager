@@ -1,0 +1,26 @@
+.event-card, .bloodbank-card {
+    background-color: white;
+    border-radius: 1rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.donate-button {
+    background-color: #e3342f;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: bold;
+    margin-top: 0.5rem;
+}
+
+.donate-button:hover {
+    background-color: #cc1f1a;
+}
+
+.submitted-message {
+    margin-left: 0.5rem;
+    color: green;
+    font-weight: bold;
+}

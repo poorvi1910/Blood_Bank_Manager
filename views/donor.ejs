@@ -3,46 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Donor Dashboard</title> <%# Changed title %>
+    <title>Donor Dashboard</title>
     <link href="/styles.css" rel="stylesheet">
-    <style>
-        /* Add some basic styling for event cards */
-        .event-card {
-            background-color: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .event-card h3 {
-            margin-top: 0;
-            color: #c0392b; /* Red shade */
-        }
-        .event-card p {
-            margin-bottom: 8px;
-            color: #333;
-        }
-        .donate-button {
-            background-color: #2ecc71; /* Green */
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            font-weight: bold;
-        }
-        .donate-button:hover {
-            background-color: #27ae60;
-        }
-        .submitted-message {
-            color: green;
-            font-weight: bold;
-            margin-left: 10px;
-            display: inline; /* Keep it on the same line */
-        }
-    </style>
+    <link href="/donor.css" rel="stylesheet">
 </head>
 <body class="h-screen flex flex-col bg-yellow-100">
     <nav class="flex items-center bg-red-600 p-6 justify-between">
@@ -54,11 +17,11 @@
         </form>
     </nav>
 
-    <div class="flex flex-col items-center bg-yellow-100 flex-grow p-6">
-        <h2 class="text-2xl font-semibold mb-6 text-red-700">Upcoming Donation Events</h2>
-
-        <div id="events-list" class="w-full max-w-2xl">
-            <% if (typeof events !== 'undefined' && events.length > 0) { %>
+    <div class="flex flex-grow bg-yellow-100 p-6">
+        <!-- LEFT: Events -->
+        <div class="w-1/2 pr-4 border-r border-red-300">
+            <h2 class="text-2xl font-semibold mb-6 text-red-700 text-center">Upcoming Donation Events</h2>
+            <% if (events && events.length > 0) { %>
                 <% events.forEach(event => { %>
                     <div class="event-card" id="event-<%= event.EVENTID %>">
                         <h3><%= event.EVENTNAME %></h3>
@@ -67,9 +30,7 @@
                         <p><strong>Contact:</strong> <%= event.E_PHONENO %></p>
 
                         <% if (event.ALREADYDONATED === 1) { %>
-                            <button class="donate-button" disabled>
-                                Donation Recorded
-                            </button>
+                            <button class="donate-button" disabled>Donation Recorded</button>
                             <span class="submitted-message">Submitted!</span>
                         <% } else { %>
                             <button class="donate-button" data-event-id="<%= event.EVENTID %>">
@@ -83,70 +44,75 @@
                 <p class="text-center text-gray-600">No upcoming donation events found.</p>
             <% } %>
         </div>
+
+        <!-- RIGHT: Blood Banks -->
+        <div class="w-1/2 pl-4">
+            <h2 class="text-2xl font-semibold mb-6 text-red-700 text-center">Donate Directly to Blood Banks</h2>
+            <% if (bloodbanks && bloodbanks.length > 0) { %>
+                <% bloodbanks.forEach(bank => { %>
+                    <div class="bloodbank-card">
+                        <h3>Blood Bank ID: <%= bank.BLOODBANKID %></h3>
+                        <p><strong>Address:</strong> <%= bank.B_ADDRESS %></p>
+                        <p><strong>Distance from City:</strong> <%= bank.DISTANCEFROMCITY %> km</p>
+                        <button class="donate-button" data-bloodbank-id="<%= bank.BLOODBANKID %>">
+                            Donate Directly
+                        </button>
+                        <span class="submitted-message" style="display: none;">Submitted!</span>
+                    </div>
+                <% }); %>
+            <% } else { %>
+                <p class="text-center text-gray-600">No blood banks available for direct donation.</p>
+            <% } %>
+        </div>
     </div>
 
-    <footer class="bg-red-600 text-white text-center py-3 flex-none">
+    <footer class="bg-red-600 text-white text-center py-3">
         <p class="text-lg font-semibold">Contact Us</p>
         <p>Email: support@bloodbankmanager.com</p>
         <p>Phone: +1 (800) 555-1234</p>
     </footer>
 
     <script>
-        document.getElementById('events-list').addEventListener('click', function(e) {
-            if (e.target && e.target.classList.contains('donate-button') && !e.target.disabled) {
+        document.addEventListener('click', function (e) {
+            if (e.target.classList.contains('donate-button')) {
                 const button = e.target;
-                const eventId = button.getAttribute('data-event-id');
+                const eventId = button.dataset.eventId || null;
+                const bloodBankId = button.dataset.bloodbankId || null;
                 const messageSpan = button.nextElementSibling;
 
                 button.disabled = true;
                 messageSpan.style.display = 'none';
 
-                const units = prompt(`How many units would you like to donate for Event ID ${eventId}?`);
-                if (units === null || units.trim() === '') {
-                    alert('Donation cancelled.');
-                    button.disabled = false;
-                    return;
-                }
-
-                const unitsInt = parseInt(units, 10);
-                if (isNaN(unitsInt) || unitsInt <= 0) {
-                    alert('Please enter a valid positive number for units.');
+                const units = prompt("Enter number of units to donate:");
+                if (!units || isNaN(units) || parseInt(units) <= 0) {
+                    alert("Please enter a valid number.");
                     button.disabled = false;
                     return;
                 }
 
                 fetch('/donor/donate-event', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         eventId: eventId,
-                        units: unitsInt
+                        bloodBankId: bloodBankId,
+                        units: parseInt(units)
                     })
                 })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.json().then(errData => {
-                            throw new Error(errData.message || `Server error: ${response.status}`);
-                        });
-                    }
-                    return response.json();
-                })
+                .then(res => res.json())
                 .then(data => {
                     if (data.success) {
+                        button.textContent = 'Donation Recorded';
                         messageSpan.textContent = 'Submitted!';
                         messageSpan.style.display = 'inline';
-                        button.textContent = 'Donation Recorded';
-                        button.disabled = true;
                     } else {
-                        alert(`Submission failed: ${data.message}`);
+                        alert(data.message);
                         button.disabled = false;
                     }
                 })
-                .catch(error => {
-                    console.error('Error submitting donation:', error);
-                    alert(`Submission failed: ${error.message}`);
+                .catch(err => {
+                    console.error(err);
+                    alert("Submission failed.");
                     button.disabled = false;
                 });
             }

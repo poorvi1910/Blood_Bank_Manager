@@ -165,103 +165,75 @@ router.post('/admin-login', async (req, res) => {
     }
 });
 
-router.get('/donor', async (req, res) => { 
+router.get('/donor', async (req, res) => {
   const donorId = req.session.userId;
-
   try {
-      const eventQuery = `
-          SELECT de.EventID, de.EventName, de.Location, de.EventDate, de.E_PhoneNo,
-                 CASE
-                     WHEN EXISTS (
-                         SELECT 1 FROM DonationInfo di
-                         WHERE di.EventID = de.EventID AND di.DonorID = :donorId
-                     )
-                     THEN 1
-                     ELSE 0
-                 END AS AlreadyDonated
-          FROM DonationEvents de
-          ORDER BY de.EventDate DESC
-      `;
-      
-      const eventResult = await executeQuery(
-          eventQuery,
-          { donorId },
-          { outFormat: oracledb.OUT_FORMAT_OBJECT }
-      );
+      const [eventResult, bloodbankResult] = await Promise.all([
+          executeQuery(`
+              SELECT de.EventID, de.EventName, de.Location, de.EventDate, de.E_PhoneNo,
+                     CASE WHEN EXISTS (
+                         SELECT 1 FROM DonationInfo di WHERE di.EventID = de.EventID AND di.DonorID = :donorId
+                     ) THEN 1 ELSE 0 END AS AlreadyDonated
+              FROM DonationEvents de
+              ORDER BY de.EventDate DESC
+          `, { donorId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
+
+          executeQuery(`SELECT * FROM BloodBank`, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT })
+      ]);
 
       const events = eventResult.rows.map(event => ({
           ...event,
           EVENTDATE: event.EVENTDATE ? new Date(event.EVENTDATE).toLocaleDateString() : 'N/A'
       }));
 
-      res.render('donor', { events });
-
+      res.render('donor', { events, bloodbanks: bloodbankResult.rows });
   } catch (err) {
-      console.error("Error fetching donor page data:", err);
-      res.status(500).send("Error loading donor page.");
+      console.error("Error fetching donor dashboard:", err);
+      res.status(500).send("Error loading dashboard.");
   }
 });
 
-
 router.post('/donor/donate-event', async (req, res) => {
-  const { eventId, units } = req.body;
+  const { eventId, bloodBankId, units } = req.body;
   const donorId = req.session.userId;
 
-  if (!eventId || !units || !donorId) {
-      return res.status(400).json({ success: false, message: 'Missing event ID, units, or donor information.' });
-  }
-
-  const unitsDonated = parseInt(units, 10);
-  if (isNaN(unitsDonated) || unitsDonated <= 0) {
-      return res.status(400).json({ success: false, message: 'Invalid number of units specified.' });
+  if (!units || !donorId) {
+      return res.status(400).json({ success: false, message: 'Missing input.' });
   }
 
   try {
-      const eventQuery = `SELECT BloodBankID FROM DonationEvents WHERE EventID = :eventId`;
-      const eventResult = await executeQuery(eventQuery, { eventId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+      let finalBloodBankId = bloodBankId;
 
-      if (!eventResult.rows || eventResult.rows.length === 0) {
-          return res.status(404).json({ success: false, message: 'Event not found.' });
+      // If donating to event, get its blood bank
+      if (eventId) {
+          const eventResult = await executeQuery(
+              `SELECT BloodBankID FROM DonationEvents WHERE EventID = :eventId`,
+              { eventId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
+          );
+          if (!eventResult.rows.length) {
+              return res.status(404).json({ success: false, message: 'Event not found.' });
+          }
+          finalBloodBankId = eventResult.rows[0].BLOODBANKID;
       }
-      const bloodBankId = eventResult.rows[0].BLOODBANKID;
-       if (!bloodBankId) {
-           console.error(`Event ${eventId} found but has no associated BloodBankID.`);
-           return res.status(500).json({ success: false, message: 'Event configuration error.' });
-       }
 
+      await executeQuery(`
+          INSERT INTO DonationInfo (DonationID, BloodBankID, UnitsDonated, EventID, CollectionDate, DonorID, ExpiryDate)
+          VALUES (DONATION_SEQ.NEXTVAL, :bloodBankId, :units, :eventId, SYSDATE, :donorId, SYSDATE + 42)
+      `, {
+          bloodBankId: finalBloodBankId,
+          units,
+          eventId: eventId || null,
+          donorId
+      }, { autoCommit: true });
 
-      console.log(`Attempting to insert donation: DonorID ${donorId}, EventID ${eventId}, BloodBankID ${bloodBankId}, Units ${unitsDonated}`);
-
-      const insertQuery = `
-          INSERT INTO DonationInfo (
-              DonationID, BloodBankID, UnitsDonated, EventID,
-              CollectionDate, DonorID, ExpiryDate
-          ) VALUES (
-              DONATION_SEQ.NEXTVAL, :bloodBankId, :unitsDonated, :eventId,
-              SYSDATE, :donorId, SYSDATE + 42 -- Assuming 42 days expiry
-          )
-      `;
-      const binds = {
-          bloodBankId: bloodBankId,
-          unitsDonated: unitsDonated,
-          eventId: parseInt(eventId, 10), // Ensure eventId is a number
-          donorId: donorId
-      };
-
-      await executeQuery(insertQuery, binds, { autoCommit: true }); // autoCommit is suitable for single INSERTs
-
-      console.log(`Donation recorded successfully: DonorID ${donorId}, EventID ${eventId}, Units ${unitsDonated}`);
-      res.json({ success: true, message: 'Donation submitted successfully! Thank you for your contribution.' });
-
+      res.json({ success: true });
   } catch (err) {
-      console.error("Error processing donation submission:", err);
-       if (err.message && err.message.includes("ORA-02291")) {
-           res.status(400).json({ success: false, message: 'Invalid data. Please check donor or event details.' });
-       } else {
-          res.status(500).json({ success: false, message: 'Server error processing donation.' });
-       }
+      console.error("Donation error:", err);
+      res.status(500).json({ success: false, message: 'Server error.' });
   }
 });
+
+
 
 router.get('/admindonor', async (req, res) => {
     try {
