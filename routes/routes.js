@@ -6,30 +6,27 @@ const oracledb = require('oracledb');
 const { initializeProcedures } = require('../db/procedures');
 initializeProcedures();
 
-async function initializePool() {
-    try {
-      await oracledb.createPool({
-        user: "C##user1",
-        password: "pass1",
-        connectString: "localhost:1521/XE", // e.g., "localhost/XE"
-        poolAlias: "default", // Important: Set the alias to "default" if that's what your code expects
-        poolMin: 5,
-        poolMax: 10,
-        poolIncrement: 1
-        // ... other pool options
-      });
-      console.log('Oracle connection pool initialized.');
-    } catch (err) {
-      console.error('Error initializing Oracle connection pool:', err);
-      process.exit(1); // Exit the application if pool creation fails
-    }
-  }
+// async function initializePool() {
+//     try {
+//       await oracledb.createPool({
+//         user: "C##user1",
+//         password: "pass1",
+//         connectString: "localhost:1521/XE", // e.g., "localhost/XE"
+//         poolAlias: "default", // Important: Set the alias to "default" if that's what your code expects
+//         poolMin: 5,
+//         poolMax: 10,
+//         poolIncrement: 1
+//         // ... other pool options
+//       });
+//       console.log('Oracle connection pool initialized.');
+//     } catch (err) {
+//       console.error('Error initializing Oracle connection pool:', err);
+//       process.exit(1); // Exit the application if pool creation fails
+//     }
+//   }
 
-  initializePool();
+//   initializePool();
   
-function getLoggedInDonorId(req) {
-    return 1;
-}
 
 router.get('/', (req, res) => {
     res.render('index');
@@ -92,29 +89,35 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-    const { name, password } = req.body;
-    if (!name || !password) {
-        return res.status(400).send("Username and Password are required.");
-    }
-    try {
-        const query = `BEGIN LOGIN_DONOR(:d_name, :password, :is_valid); END;`;
-        const binds = {
-            d_name: name, password: password,
-            is_valid: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
-        };
-        const result = await executeQuery(query, binds);
-        if (result.outBinds && result.outBinds.is_valid === 1) {
-            console.log(`Donor login successful: ${name}`);
-            res.render('home'); 
-        } else {
-            console.log(`Donor login failed: ${name}`);
-             res.render('index', { loginError: 'Invalid Donor Credentials' }); 
-        }
-    } catch (err) {
-        console.error("Donor Login Error:", err);
-        res.status(500).send("Login failed due to a server error.");
-    }
+  const { name, password } = req.body;
+  if (!name || !password) {
+      return res.status(400).send("Username and Password are required.");
+  }
+
+  try {
+      const query = `BEGIN LOGIN_DONOR(:d_name, :password, :is_valid, :donor_id); END;`;
+      const binds = {
+          d_name: name,
+          password: password,
+          is_valid: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          donor_id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
+      };
+      const result = await executeQuery(query, binds);
+
+      if (result.outBinds && result.outBinds.is_valid === 1) {
+          req.session.userId = result.outBinds.donor_id; // Store DonorID in session
+          console.log(`Donor login successful: ${name}, DonorID: ${result.outBinds.donor_id}`);
+          res.render('home');
+      } else {
+          console.log(`Donor login failed: ${name}`);
+          res.render('index', { loginError: 'Invalid Donor Credentials' });
+      }
+  } catch (err) {
+      console.error("Donor Login Error:", err);
+      res.status(500).send("Login failed due to a server error.");
+  }
 });
+
 
 router.post('/admin-login', async (req, res) => {
     const { name, password } = req.body;
@@ -148,9 +151,6 @@ router.post('/admin-login', async (req, res) => {
                // In your /admin-login route, after setting the session
               req.session.adminBloodBankId = bloodBankId; // Already exists
               console.log("Blood Bank ID set in session:", req.session.adminBloodBankId);
-              
-
-
             
                 res.redirect('/admin');
             }
@@ -166,42 +166,101 @@ router.post('/admin-login', async (req, res) => {
 });
 
 router.get('/donor', async (req, res) => { 
-    try {
-        const eventQuery = `SELECT EventID, EventName, Location, EventDate, E_PhoneNo FROM DonationEvents ORDER BY EventDate DESC`;
-        const eventResult = await executeQuery(eventQuery, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }); 
-        const events = eventResult.rows.map(event => ({
-            ...event,
-            EVENTDATE: event.EVENTDATE ? new Date(event.EVENTDATE).toLocaleDateString() : 'N/A' 
-        }));
-        res.render('donor', { events: events });
+  const donorId = req.session.userId;
 
-    } catch (err) {
-        console.error("Error fetching donor page data:", err);
-        res.status(500).send("Error loading donor page.");
-    }
+  try {
+      const eventQuery = `
+          SELECT de.EventID, de.EventName, de.Location, de.EventDate, de.E_PhoneNo,
+                 CASE
+                     WHEN EXISTS (
+                         SELECT 1 FROM DonationInfo di
+                         WHERE di.EventID = de.EventID AND di.DonorID = :donorId
+                     )
+                     THEN 1
+                     ELSE 0
+                 END AS AlreadyDonated
+          FROM DonationEvents de
+          ORDER BY de.EventDate DESC
+      `;
+      
+      const eventResult = await executeQuery(
+          eventQuery,
+          { donorId },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+
+      const events = eventResult.rows.map(event => ({
+          ...event,
+          EVENTDATE: event.EVENTDATE ? new Date(event.EVENTDATE).toLocaleDateString() : 'N/A'
+      }));
+
+      res.render('donor', { events });
+
+  } catch (err) {
+      console.error("Error fetching donor page data:", err);
+      res.status(500).send("Error loading donor page.");
+  }
 });
 
+
 router.post('/donor/donate-event', async (req, res) => {
-    const { eventId, units } = req.body;
-    const donorId = getLoggedInDonorId(req); 
+  const { eventId, units } = req.body;
+  const donorId = req.session.userId;
 
-    if (!eventId || !units || !donorId) {
-        return res.status(400).json({ success: false, message: 'Missing event ID, units, or donor information.' });
-    }
+  if (!eventId || !units || !donorId) {
+      return res.status(400).json({ success: false, message: 'Missing event ID, units, or donor information.' });
+  }
 
-    const unitsDonated = parseInt(units, 10);
-    if (isNaN(unitsDonated) || unitsDonated <= 0) {
-        return res.status(400).json({ success: false, message: 'Invalid number of units specified.' });
-    }
+  const unitsDonated = parseInt(units, 10);
+  if (isNaN(unitsDonated) || unitsDonated <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid number of units specified.' });
+  }
 
-    try {
-        console.log(`Received donation intent: DonorID ${donorId}, EventID ${eventId}, Units ${unitsDonated}`);
-        res.json({ success: true, message: 'Donation submitted successfully!' });
+  try {
+      const eventQuery = `SELECT BloodBankID FROM DonationEvents WHERE EventID = :eventId`;
+      const eventResult = await executeQuery(eventQuery, { eventId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
 
-    } catch (err) {
-        console.error("Error processing donation submission:", err);
-        res.status(500).json({ success: false, message: 'Server error processing donation.' });
-    }
+      if (!eventResult.rows || eventResult.rows.length === 0) {
+          return res.status(404).json({ success: false, message: 'Event not found.' });
+      }
+      const bloodBankId = eventResult.rows[0].BLOODBANKID;
+       if (!bloodBankId) {
+           console.error(`Event ${eventId} found but has no associated BloodBankID.`);
+           return res.status(500).json({ success: false, message: 'Event configuration error.' });
+       }
+
+
+      console.log(`Attempting to insert donation: DonorID ${donorId}, EventID ${eventId}, BloodBankID ${bloodBankId}, Units ${unitsDonated}`);
+
+      const insertQuery = `
+          INSERT INTO DonationInfo (
+              DonationID, BloodBankID, UnitsDonated, EventID,
+              CollectionDate, DonorID, ExpiryDate
+          ) VALUES (
+              DONATION_SEQ.NEXTVAL, :bloodBankId, :unitsDonated, :eventId,
+              SYSDATE, :donorId, SYSDATE + 42 -- Assuming 42 days expiry
+          )
+      `;
+      const binds = {
+          bloodBankId: bloodBankId,
+          unitsDonated: unitsDonated,
+          eventId: parseInt(eventId, 10), // Ensure eventId is a number
+          donorId: donorId
+      };
+
+      await executeQuery(insertQuery, binds, { autoCommit: true }); // autoCommit is suitable for single INSERTs
+
+      console.log(`Donation recorded successfully: DonorID ${donorId}, EventID ${eventId}, Units ${unitsDonated}`);
+      res.json({ success: true, message: 'Donation submitted successfully! Thank you for your contribution.' });
+
+  } catch (err) {
+      console.error("Error processing donation submission:", err);
+       if (err.message && err.message.includes("ORA-02291")) {
+           res.status(400).json({ success: false, message: 'Invalid data. Please check donor or event details.' });
+       } else {
+          res.status(500).json({ success: false, message: 'Server error processing donation.' });
+       }
+  }
 });
 
 router.get('/admindonor', async (req, res) => {

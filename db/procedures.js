@@ -85,33 +85,35 @@ async function createRegisterAdminProcedure() {
 async function createLoginDonorProcedure() {
     const procQuery = `
         CREATE OR REPLACE PROCEDURE LOGIN_DONOR(
-            p_d_name IN Donors.D_Name%TYPE,      -- Use D_Name for login
+            p_d_name IN Donors.D_Name%TYPE,
             p_password IN Donors.Password%TYPE,
-            is_valid OUT NUMBER                 -- 1 if valid, 0 otherwise
+            is_valid OUT NUMBER,
+            p_donor_id OUT Donors.DonorID%TYPE
         )
         AS
-            v_count NUMBER;
+            v_donor_id Donors.DonorID%TYPE;
         BEGIN
-            SELECT COUNT(*) INTO v_count
+            SELECT DonorID INTO v_donor_id
             FROM Donors
-            WHERE D_Name = p_d_name AND Password = p_password; -- Compare hashed password in real app
+            WHERE D_Name = p_d_name AND Password = p_password;
 
-            IF v_count = 1 THEN
-                is_valid := 1;
-            ELSE
+            is_valid := 1;
+            p_donor_id := v_donor_id;
+
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
                 is_valid := 0;
-            END IF;
+                p_donor_id := NULL;
         END;
-    `; // Removed trailing semicolon after END;
-
+    `;
     try {
         await executeQuery(procQuery, {});
         console.log("Stored Procedure 'LOGIN_DONOR' created/replaced successfully.");
     } catch (err) {
         console.error("Error creating/replacing 'LOGIN_DONOR':", err);
-        // throw err;
     }
 }
+
 
 // --- Admin Login Procedure ---
 async function createLoginAdminProcedure() {
