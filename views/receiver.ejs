@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Donor</title>
+    <title>Receiver Dashboard</title>
     <link href="/styles.css" rel="stylesheet">
 </head>
 <body class="h-screen flex flex-col bg-yellow-100">
+
+    <!-- Navbar -->
     <nav class="flex items-center bg-red-600 p-6 justify-end">
         <form method="post" action="/logout">
             <button type="submit" class="bg-red-600 text-red-100 hover:bg-white hover:text-red-400 rounded mr-4 px-4 py-2">
@@ -14,12 +15,57 @@
             </button>
         </form>
     </nav>
-    <div class="flex flex-col sm:flex-row justify-center bg-yellow-100 flex-grow">
+
+    <!-- Main Content -->
+    <div class="flex flex-col sm:flex-row justify-center bg-yellow-100 flex-grow p-6 gap-6">
+
+        <!-- Left: Blood Bank Info -->
+        <div class="w-full sm:w-1/2 bg-white rounded-xl p-4 shadow-lg overflow-y-auto max-h-[75vh]">
+            <h2 class="text-xl font-bold mb-4 text-red-600">Available Blood Banks</h2>
+            <% bloodbanks.forEach(bank => { %>
+                <div class="mb-3 p-3 border rounded bg-gray-100">
+                    <p><strong>ID:</strong> <%= bank.BLOODBANKID %></p>
+                    <p><strong>Address:</strong> <%= bank.B_ADDRESS %></p>
+                    <p><strong>Distance:</strong> <%= bank.DISTANCEFROMCITY %> km</p>
+                </div>
+            <% }) %>
+        </div>
+
+        <!-- Right: Blood Request Form -->
+        <div class="w-full sm:w-1/2 bg-white rounded-xl p-4 shadow-lg">
+            <h2 class="text-xl font-bold mb-4 text-red-600">Request Blood</h2>
+            <form method="post" action="/receiver/request" class="flex flex-col gap-3">
+
+                <input type="hidden" name="r_name" value="<%= donor.D_NAME %>">
+                <input type="hidden" name="r_dob" value="<%= donor.D_DOB.toISOString().split('T')[0] %>">
+                <input type="hidden" name="r_gender" value="<%= donor.D_GENDER %>">
+                <input type="hidden" name="r_bloodGroup" value="<%= donor.D_BLOODGROUP %>">
+                <input type="hidden" name="r_phoneNo" value="<%= donor.D_PHONENO %>">
+                <input type="hidden" name="r_address" value="<%= donor.D_ADDRESS %>">
+
+                <label class="font-semibold">Reason for Request</label>
+                <input type="text" name="reasonForRequest" required class="p-2 border rounded">
+
+                <label class="font-semibold">Severity (1-10)</label>
+                <input type="number" name="severity" min="1" max="10" required class="p-2 border rounded">
+
+                <label class="font-semibold">Required Units</label>
+                <input type="number" name="requiredUnits" min="1" required class="p-2 border rounded">
+
+                <button type="submit" class="bg-red-600 text-white hover:bg-red-700 px-4 py-2 rounded mt-4">
+                    Submit Request
+                </button>
+            </form>
+        </div>
+
     </div>
-    <footer class="bg-red-600 text-white text-center py-3 flex-none">
+
+    <!-- Footer -->
+    <footer class="bg-red-600 text-white text-center py-3">
         <p class="text-lg font-semibold">Contact Us</p>
         <p>Email: support@bloodbankmanager.com</p>
         <p>Phone: +1 (800) 555-1234</p>
     </footer>
+
 </body>
 </html>

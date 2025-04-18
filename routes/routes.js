@@ -471,18 +471,69 @@ router.post('/admin/check-inventory', async (req, res) => {
     }
   });
   
+  router.get('/receiver', async (req, res) => {
+    const donorId = req.session.userId;
 
+    if (!donorId) {
+        return res.status(403).send("Unauthorized access. Please log in.");
+    }
 
-
-
-router.get('/receiver', async (req, res) => {
     try {
-        res.render('receiver');
+        const [donorResult, bloodbankResult] = await Promise.all([
+            executeQuery(
+                `SELECT D_NAME, D_DOB, D_GENDER, D_BLOODGROUP, D_PHONENO, D_ADDRESS FROM DONORS WHERE DONORID = :id`,
+                { id: donorId },
+                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            ),
+            executeQuery(
+                `SELECT * FROM BLOODBANK`,
+                {},
+                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            )
+        ]);
+
+        if (!donorResult.rows.length) {
+            return res.status(404).send("Donor not found.");
+        }
+
+        res.render('receiver', {
+            donor: donorResult.rows[0],
+            bloodbanks: bloodbankResult.rows
+        });
     } catch (err) {
-        console.error(err);
-        res.sendStatus(500);
+        console.error("Receiver Page Error:", err);
+        res.status(500).send("Internal Server Error");
     }
 });
+
+router.post('/receiver/request', async (req, res) => {
+    const {
+        r_name, r_dob, r_gender, r_bloodGroup,
+        r_phoneNo, r_address, reasonForRequest,
+        severity, requiredUnits
+    } = req.body;
+
+    try {
+        await executeQuery(`
+            INSERT INTO Recipients (
+                RecipientID, R_Name, R_DOB, R_Gender, R_BloodGroup, R_PhoneNo,
+                R_Address, ReasonForRequest, Severity, RequiredUnits
+            ) VALUES (
+                RECIPIENT_SEQ.NEXTVAL, :r_name, TO_DATE(:r_dob, 'YYYY-MM-DD'), :r_gender, :r_bloodGroup, :r_phoneNo,
+                :r_address, :reasonForRequest, :severity, :requiredUnits
+            )
+        `, {
+            r_name, r_dob, r_gender, r_bloodGroup, r_phoneNo,
+            r_address, reasonForRequest, severity: parseInt(severity), requiredUnits: parseInt(requiredUnits)
+        }, { autoCommit: true });
+
+        res.redirect('/receiver');
+    } catch (err) {
+        console.error('Recipient insert error:', err);
+        res.status(500).send("Failed to submit blood request.");
+    }
+});
+
 
 router.get('/admin', (req, res) => {
     res.render('admin'); 
