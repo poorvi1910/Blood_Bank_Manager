@@ -27,28 +27,42 @@ router.post('/register', async (req, res) => {
     try {
         if (role === 'user') {
             const { d_name, d_dob, d_gender, d_bloodGroup, d_phoneNo, d_address, healthStatus, lastDonationDate, weight, password } = req.body;
+
             if (!d_name || !d_dob || !d_gender || !d_bloodGroup || !d_phoneNo || !d_address || !healthStatus || !weight || !password) {
                 return res.status(400).send("Missing required donor information.");
             }
+
+            // Additional check for valid DOB format
+            const dobDate = new Date(d_dob);
+            if (isNaN(dobDate)) {
+                return res.status(400).send("Invalid date format for Date of Birth.");
+            }
+
             const query = `BEGIN REGISTER_DONOR(:d_name, :d_phoneNo, :password, :d_dob, :d_gender, :d_bloodGroup, :d_address, :healthStatus, :lastDonationDate, :weight); END;`;
             const binds = {
                 d_name, d_phoneNo, password, d_dob, d_gender, d_bloodGroup, d_address, healthStatus,
                 lastDonationDate: lastDonationDate || null,
                 weight: parseFloat(weight)
             };
+
+            // Execute the query to register the donor
             await executeQuery(query, binds);
             console.log("Donor registered successfully.");
             res.redirect('/');
 
         } else if (role === 'admin') {
             const { a_name, bloodBankID, a_address, a_phoneNo, password } = req.body;
+
             if (!a_name || !bloodBankID || !a_address || !a_phoneNo || !password) {
                 return res.status(400).send("Missing required admin information.");
             }
+
             const query = `BEGIN REGISTER_ADMIN(:a_name, :bloodBankID, :a_address, :a_phoneNo, :password); END;`;
             const binds = {
                 a_name, bloodBankID: parseInt(bloodBankID, 10), a_address, a_phoneNo, password
             };
+
+            // Execute the query to register the admin
             await executeQuery(query, binds);
             console.log("Admin registered successfully.");
             res.redirect('/');
@@ -56,15 +70,24 @@ router.post('/register', async (req, res) => {
 
     } catch (err) {
         console.error("Registration Error:", err);
+
+        // Custom error handling for the age check triggered in the donor registration
+        if (err.errorNum === 20001) {
+            return res.status(400).send(err.message.replace("ORA-20001: ", "")); // Extract and show the custom age error message
+        }
+
+        // Handle other known Oracle errors
         if (err.errorNum === 1) {
             res.status(409).send("Registration failed. A user or admin with some of these details (e.g., phone, name) might already exist.");
         } else if (err.errorNum === 2291) {
             res.status(400).send("Registration failed. Invalid data provided (e.g., the specified Blood Bank ID does not exist).");
         } else {
+            // General server error message if other errors occur
             res.status(500).send("Registration failed due to a server error. Please try again later.");
         }
     }
 });
+
 
 router.post('/login', async (req, res) => {
   const { name, password } = req.body;
@@ -172,45 +195,71 @@ router.get('/donor', async (req, res) => {
 });
 
 router.post('/donor/donate-event', async (req, res) => {
-  const units=1;
-  const { eventId, bloodBankId} = req.body;
-  const donorId = req.session.userId;
-
-  if (!units || !donorId) {
-      return res.status(400).json({ success: false, message: 'Missing input.' });
-  }
-
-  try {
-      let finalBloodBankId = bloodBankId;
-
-      // If donating to event, get its blood bank
-      if (eventId) {
-          const eventResult = await executeQuery(
-              `SELECT BloodBankID FROM DonationEvents WHERE EventID = :eventId`,
-              { eventId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
-          );
-          if (!eventResult.rows.length) {
-              return res.status(404).json({ success: false, message: 'Event not found.' });
-          }
-          finalBloodBankId = eventResult.rows[0].BLOODBANKID;
-      }
-
-      await executeQuery(`
-          INSERT INTO DonationInfo (DonationID, BloodBankID, UnitsDonated, EventID, CollectionDate, DonorID, ExpiryDate)
-          VALUES (DONATION_SEQ.NEXTVAL, :bloodBankId, :units, :eventId, SYSDATE, :donorId, SYSDATE + 42)
-      `, {
-          bloodBankId: finalBloodBankId,
-          units,
-          eventId: eventId || null,
-          donorId
-      }, { autoCommit: true });
-
-      res.json({ success: true });
-  } catch (err) {
-      console.error("Donation error:", err);
-      res.status(500).json({ success: false, message: 'Server error.' });
-  }
-});
+    const units = 1;
+    const { eventId, bloodBankId } = req.body;
+    const donorId = req.session.userId;
+  
+    if (!units || !donorId) {
+        return res.status(400).json({ success: false, message: 'Missing input.' });
+    }
+  
+    try {
+        let finalBloodBankId = bloodBankId;
+  
+        // If donating to event, get its blood bank
+        if (eventId) {
+            const eventResult = await executeQuery(
+                `SELECT BloodBankID FROM DonationEvents WHERE EventID = :eventId`,
+                { eventId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            );
+            if (!eventResult.rows.length) {
+                return res.status(404).json({ success: false, message: 'Event not found.' });
+            }
+            finalBloodBankId = eventResult.rows[0].BLOODBANKID;
+        }
+  
+        // Attempt to insert the donation, trigger will check eligibility
+        await executeQuery(`
+            INSERT INTO DonationInfo (DonationID, BloodBankID, UnitsDonated, EventID, CollectionDate, DonorID, ExpiryDate)
+            VALUES (DONATION_SEQ.NEXTVAL, :bloodBankId, :units, :eventId, SYSDATE, :donorId, SYSDATE + 42)
+        `, {
+            bloodBankId: finalBloodBankId,
+            units,
+            eventId: eventId || null,
+            donorId
+        }, { autoCommit: true });
+  
+        res.json({ success: true });
+  
+    } catch (err) {
+        console.error("Donation error:", err);
+  
+        // Check for custom error raised by the trigger
+        if (err.errorNum === 20001) {
+            const reason = err.message.replace("ORA-20001: ", "");
+          
+            let customMessage = "You can't donate – ";
+  
+            if (reason.includes('HealthStatus')) {
+                customMessage += "you're unhealthy.";
+            } else if (reason.includes('LastDonation')) {
+                customMessage += "your last donation was less than 2 months ago.";
+            } else {
+                customMessage += "you are not eligible to donate.";
+            }
+  
+            return res.status(400).json({
+                success: false,
+                message: customMessage
+            });
+        }
+        
+        
+        // Handle other potential errors
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+  });
+  
 
 
 
@@ -417,8 +466,8 @@ router.post('/admin/check-inventory', async (req, res) => {
   
       // Perform updates inside transaction
       const connection = await oracledb.getConnection({
-        user: "system",
-        password: "pmysql",
+        user: "C##user1",
+        password: "pass1",
         connectString: "localhost:1521/XE"
       });
   

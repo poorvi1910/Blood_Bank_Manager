@@ -147,6 +147,167 @@ async function createLoginAdminProcedure() {
     }
 }
 
+
+async function createDonationInfoTrigger() {
+    const triggerQuery = `
+    CREATE OR REPLACE TRIGGER trg_delete_if_units_zero
+    FOR UPDATE ON DonationInfo
+    COMPOUND TRIGGER
+        -- Define a collection to store IDs to delete
+        TYPE id_list_type IS TABLE OF DonationInfo.DonationID%TYPE INDEX BY PLS_INTEGER;
+        ids_to_delete id_list_type;
+        idx PLS_INTEGER := 0;
+
+        -- Row-level section: collect IDs that need deletion
+        AFTER EACH ROW IS
+        BEGIN
+            IF :NEW.UnitsDonated = 0 THEN
+                idx := idx + 1;
+                ids_to_delete(idx) := :OLD.DonationID;
+            END IF;
+        END AFTER EACH ROW;
+
+        -- Statement-level section: perform the actual deletions
+        AFTER STATEMENT IS
+        BEGIN
+            FOR i IN 1..idx LOOP
+                DELETE FROM DonationInfo
+                WHERE DonationID = ids_to_delete(i);
+            END LOOP;
+        END AFTER STATEMENT;
+    END trg_delete_if_units_zero;
+    `;
+
+    try {
+        await executeQuery(triggerQuery, {});
+        console.log("Trigger 'trg_delete_if_units_zero' created/replaced successfully.");
+    } catch (err) {
+        console.error("Error creating trigger 'trg_delete_if_units_zero':", err);
+    }
+}
+
+
+async function createDonorEligibilityTrigger() {
+    const triggerQuery = `
+  CREATE OR REPLACE TRIGGER trg_check_donor_eligibility
+BEFORE INSERT ON DonationInfo
+FOR EACH ROW
+DECLARE
+    v_health_status VARCHAR2(20);
+    v_last_donation DATE;
+    v_is_eligible NUMBER := 1; -- Default to eligible
+    v_reason VARCHAR2(100);
+BEGIN
+    -- Get donor health status and last donation date
+    SELECT HealthStatus, LastDonationDate
+    INTO v_health_status, v_last_donation
+    FROM Donors
+    WHERE DonorID = :NEW.DonorID;
+
+    -- Check health status (should be 'Healthy')
+    IF UPPER(v_health_status) != 'HEALTHY' THEN
+        v_is_eligible := 0;
+        v_reason := 'HealthStatus';  -- Indicating health issue
+    END IF;
+
+    -- Check last donation date (if exists)
+    IF v_last_donation IS NOT NULL THEN
+        IF ADD_MONTHS(v_last_donation, 2) > SYSDATE THEN
+            v_is_eligible := 0;
+            v_reason := 'LastDonation';  -- Indicating last donation date issue
+        END IF;
+    END IF;
+
+    -- If not eligible, raise an application error to prevent insert
+    IF v_is_eligible = 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, v_reason);
+    END IF;
+END;
+
+    `;
+
+    try {
+        await executeQuery(triggerQuery, {});
+        console.log("Trigger 'trg_check_donor_eligibility' created/replaced successfully.");
+    } catch (err) {
+        console.error("Error creating trigger 'trg_check_donor_eligibility':", err);
+    }
+}
+
+
+// async function createDonorAgeCheckTrigger() {
+//     const triggerQuery = `
+//     CREATE OR REPLACE TRIGGER trg_check_donor_age
+//     BEFORE INSERT ON Donors
+//     FOR EACH ROW
+//     DECLARE
+//         v_age NUMBER;
+//         v_dob DATE;
+//         v_message VARCHAR2(200);
+//         v_date_string VARCHAR2(10) := :NEW.D_DOB;
+//     BEGIN
+//         -- Debug: Show what date string we received
+//         DBMS_OUTPUT.PUT_LINE('Received date string: ' || v_date_string);
+        
+//         -- First handle NULL case
+//         IF v_date_string IS NULL THEN
+//             v_message := 'Date of birth cannot be NULL.';
+//             RAISE_APPLICATION_ERROR(-20001, v_message);
+//         END IF;
+        
+//         -- Explicitly check date string format first
+//         IF REGEXP_LIKE(v_date_string, '^\d{4}-\d{2}-\d{2}$') = FALSE THEN
+//             v_message := 'Invalid date format. Use exactly YYYY-MM-DD.';
+//             RAISE_APPLICATION_ERROR(-20001, v_message);
+//         END IF;
+        
+//         -- Convert with strict error handling
+//         BEGIN
+//             v_dob := TO_DATE(v_date_string, 'YYYY-MM-DD');
+//             -- Additional validation for valid calendar date
+//             IF EXTRACT(YEAR FROM v_dob) < 1900 THEN
+//                 RAISE_APPLICATION_ERROR(-20001, 'Birth year must be after 1900');
+//             END IF;
+//         EXCEPTION
+//             WHEN OTHERS THEN
+//                 v_message := 'Invalid date. Use a real calendar date in YYYY-MM-DD format.';
+//                 RAISE_APPLICATION_ERROR(-20001, v_message);
+//         END;
+        
+//         -- Check if DOB is in the future
+//         IF v_dob > TRUNC(SYSDATE) THEN
+//             v_message := 'Date of birth cannot be in the future.';
+//             RAISE_APPLICATION_ERROR(-20001, v_message);
+//         END IF;
+        
+//         -- Calculate age properly
+//         v_age := FLOOR(MONTHS_BETWEEN(TRUNC(SYSDATE), v_dob) / 12);
+        
+//         -- Debug output
+//         DBMS_OUTPUT.PUT_LINE('Converted date: ' || TO_CHAR(v_dob, 'YYYY-MM-DD'));
+//         DBMS_OUTPUT.PUT_LINE('Calculated age: ' || v_age);
+        
+//         -- Check age range
+//         IF v_age < 18 THEN
+//             v_message := 'Donor must be at least 18 (current age: ' || v_age || ')';
+//             RAISE_APPLICATION_ERROR(-20001, v_message);
+//         ELSIF v_age > 65 THEN
+//             v_message := 'Donor must be 65 or younger (current age: ' || v_age || ')';
+//             RAISE_APPLICATION_ERROR(-20001, v_message);
+//         END IF;
+//     END;
+//     `;
+
+//     try {
+//         await executeQuery(triggerQuery, {});
+//         console.log("Trigger 'trg_check_donor_age' created/replaced successfully.");
+//     } catch (err) {
+//         console.error("Error creating/replacing trigger 'trg_check_donor_age':", err);
+//     }
+// }
+
+
+
 // --- Function to Initialize All Procedures ---
 async function initializeProcedures() {
     console.log("Initializing database procedures...");
@@ -154,6 +315,9 @@ async function initializeProcedures() {
     await createRegisterAdminProcedure();
     await createLoginDonorProcedure();
     await createLoginAdminProcedure();
+    await createDonationInfoTrigger();
+    await createDonorEligibilityTrigger();
+    //await createDonorAgeCheckTrigger();
     console.log("Database procedures initialization complete.");
 }
 
