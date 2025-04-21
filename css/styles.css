@@ -186,6 +186,9 @@
   .visible {
     visibility: visible;
   }
+  .fixed {
+    position: fixed;
+  }
   .mt-4 {
     margin-top: calc(var(--spacing) * 4);
   }

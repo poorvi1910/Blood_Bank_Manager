@@ -289,10 +289,10 @@ router.get('/adminreceiver', async (req, res) => {
 router.post('/admin/check-inventory', async (req, res) => {
     const { recipientID, requiredUnits, recipientBloodGroup } = req.body;
     console.log("Received body:", req.body);
-
+  
     const bloodBankId = req.session.adminBloodBankId;
     console.log("Blood bank ID in session:", bloodBankId);
-
+  
     if (!bloodBankId) {
       return res.status(403).send("Unauthorized: no blood bank ID in session.");
     }
@@ -305,48 +305,46 @@ router.post('/admin/check-inventory', async (req, res) => {
       'A+': ['A+','AB+'],
       'B-': ['B-','B+','AB-','AB+'],
       'B+': ['B+','AB+'],
-      'AB-':['AB-','AB+'],
-      'AB+':['AB+']
+      'AB-': ['AB-','AB+'],
+      'AB+': ['AB+']
     };
     const compatibleTypes = Object.entries(compatible)
-     .filter(([donorType, canDonateTo]) => canDonateTo.includes(recipientBloodGroup))
+      .filter(([donorType, canDonateTo]) => canDonateTo.includes(recipientBloodGroup))
       .map(([donorType]) => donorType);
-
+  
     if (!compatibleTypes.length) {
       return res.status(400).send("Invalid blood group.");
     }
   
     try {
       const sql = `
-        SELECT do.DONORID,
-               do.D_BloodGroup AS BLOODGROUP,
-               d.UNITSDONATED
+        SELECT SUM(d.UNITSDONATED) AS TOTAL_UNITS
         FROM DonationInfo d
-        JOIN Donors do
-          ON d.DonorID = do.DonorID
+        JOIN Donors do ON d.DonorID = do.DonorID
         WHERE d.BLOODBANKID = :bbid
-          AND do.D_BloodGroup IN (${ compatibleTypes.map(t => `'${t}'`).join(',') })
-          AND d.UNITSDONATED >= :reqUnits
+        AND do.D_BloodGroup IN (${compatibleTypes.map(t => `'${t}'`).join(',')})
       `;
-      const binds = { bbid: bloodBankId, reqUnits: Number(requiredUnits) };
   
+      const binds = { bbid: bloodBankId };
       const result = await executeQuery(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
-      console.log("Inventory check result:", result.rows);
+      const totalUnits = result.rows[0].TOTAL_UNITS || 0;
   
-      if (result.rows.length > 0) {
-        res.json({ success: true, message: "At least one donor has sufficient compatible units." });
+      console.log("Total available units:", totalUnits);
+  
+      if (totalUnits >= Number(requiredUnits)) {
+        res.json({ success: true, message: "Sufficient units available." });
       } else {
-        res.json({ success: false, message: "No single donor has enough compatible units." });
+        res.json({ success: false, message: "Insufficient units available." });
       }
     } catch (err) {
       console.error("Error in check-inventory:", err);
       res.status(500).send("Internal server error: " + err.message);
-
     }
   });
+  
 
   router.post('/admin/review-receival', async (req, res) => {
-    const { recipientId, action } = req.body;       // <-- camelCase
+    const { recipientId, action } = req.body;
     const bloodBankId = req.session.adminBloodBankId;
     console.log("Receival Review Request ->", { recipientId, action, bloodBankId });
   
@@ -355,7 +353,6 @@ router.post('/admin/check-inventory', async (req, res) => {
     }
   
     try {
-      // 1) Get recipient info
       const recipientQuery = `
         SELECT RECIPIENTID, R_BLOODGROUP, REQUIREDUNITS
         FROM RECIPIENTS
@@ -363,24 +360,22 @@ router.post('/admin/check-inventory', async (req, res) => {
       `;
       const recipientResult = await executeQuery(
         recipientQuery,
-        { recipientId },                // <-- use the same name here
+        { recipientId },
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
       const recipient = recipientResult.rows[0];
-      if (!recipient) {
-        return res.json({ success: false, message: 'Recipient not found.' });
-      }
+      if (!recipient) return res.json({ success: false, message: 'Recipient not found.' });
   
       if (action === 'reject') {
         return res.json({ success: true, message: 'Request rejected.' });
       }
   
-      // 2) Find a matching donor (example for one donor; you can extend to multiple)
+      // Compatibility
       const compatibleMap = {
-        'O-': ['O-'],  'O+': ['O-','O+'],  'A-': ['O-','A-'],
-        'A+': ['O-','O+','A-','A+'],  'B-': ['O-','B-'],
-        'B+': ['O-','O+','B-','B+'],  'AB-':['O-','A-','B-','AB-'],
-        'AB+':['O-','O+','A-','A+','B-','B+','AB-','AB+']
+        'O-': ['O-'], 'O+': ['O-','O+'], 'A-': ['O-','A-'],
+        'A+': ['O-','O+','A-','A+'], 'B-': ['O-','B-'],
+        'B+': ['O-','O+','B-','B+'], 'AB-': ['O-','A-','B-','AB-'],
+        'AB+': ['O-','O+','A-','A+','B-','B+','AB-','AB+']
       };
       const compatibleTypes = compatibleMap[recipient.R_BLOODGROUP] || [];
   
@@ -389,59 +384,70 @@ router.post('/admin/check-inventory', async (req, res) => {
         FROM DONATIONINFO d
         JOIN DONORS do ON d.donorid = do.donorid
         WHERE d.BLOODBANKID = :bbid
-          AND do.D_BLOODGROUP IN (${compatibleTypes.map((_,i)=>`:b${i}`).join(',')})
-          AND d.UNITSDONATED >= :reqUnits
-        FETCH FIRST 1 ROWS ONLY
+          AND do.D_BLOODGROUP IN (${compatibleTypes.map((_, i) => `:b${i}`).join(',')})
+          AND d.UNITSDONATED > 0
+        ORDER BY d.DONATIONID
       `;
       const binds = Object.assign(
-        { bbid: bloodBankId, reqUnits: recipient.REQUIREDUNITS },
-        Object.fromEntries(compatibleTypes.map((t,i)=>[`b${i}`, t]))
+        { bbid: bloodBankId },
+        Object.fromEntries(compatibleTypes.map((t, i) => [`b${i}`, t]))
       );
+  
       const donationResult = await executeQuery(donationQuery, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
-      const donorMatch = donationResult.rows[0];
-      if (!donorMatch) {
-        return res.json({ success: false, message: 'No suitable donor found.' });
+      const donations = donationResult.rows;
+  
+      if (!donations.length) {
+        return res.json({ success: false, message: 'No compatible donations available.' });
       }
   
-      // 3) Start transaction: deduct & insert
+      // Start accumulating donations
+      let unitsNeeded = recipient.REQUIREDUNITS;
+      let allocations = [];
+  
+      for (let d of donations) {
+        if (unitsNeeded <= 0) break;
+        const useUnits = Math.min(d.UNITSDONATED, unitsNeeded);
+        allocations.push({ donationId: d.DONATIONID, unitsUsed: useUnits });
+        unitsNeeded -= useUnits;
+      }
+  
+      if (unitsNeeded > 0) {
+        return res.json({ success: false, message: 'Insufficient total compatible units.' });
+      }
+  
+      // Perform updates inside transaction
       const connection = await oracledb.getConnection({
         user: "system",
         password: "pmysql",
         connectString: "localhost:1521/XE"
       });
-
+  
       try {
-        
+        for (let alloc of allocations) {
+          await connection.execute(
+            `UPDATE DONATIONINFO SET UNITSDONATED = UNITSDONATED - :used WHERE DONATIONID = :id`,
+            { used: alloc.unitsUsed, id: alloc.donationId }
+          );
+        }
   
-        // Deduct from donor
-        await connection.execute(
-          `UPDATE DONATIONINFO
-           SET UNITSDONATED = UNITSDONATED - :used
-           WHERE DONATIONID = :id`,
-          { used: recipient.REQUIREDUNITS, id: donorMatch.DONATIONID }
-        );
-  
-        // Insert into RECEIVINGINFO (new SEQ for RECEIVALID)
         await connection.execute(
           `INSERT INTO RECEIVINGINFO (
-             RECEIVALID,RECIPIENTID,BLOODBANKID,
+             RECEIVALID, RECIPIENTID, BLOODBANKID,
              UNITSRECEIVED, RECEIVALDATE
            ) VALUES (
-             RECEIVAL_SEQ.NEXTVAL,:recipientId, :bbid, :units, SYSDATE
+             RECEIVAL_SEQ.NEXTVAL, :recipientId, :bbid, :units, SYSDATE
            )`,
           {
-            recipientId: recipientId,
+            recipientId,
             bbid: bloodBankId,
-            
             units: recipient.REQUIREDUNITS
-            
           }
         );
   
         await connection.execute('COMMIT');
         await connection.close();
-        return res.json({ success: true, message: 'Request accepted and units allocated.' });
   
+        return res.json({ success: true, message: 'Request accepted and units allocated.' });
       } catch (errTx) {
         await connection.execute('ROLLBACK');
         await connection.close();
@@ -454,6 +460,7 @@ router.post('/admin/check-inventory', async (req, res) => {
       return res.status(500).json({ success: false, message: 'Server error during review.' });
     }
   });
+  
   
   router.get('/receiver', async (req, res) => {
     const donorId = req.session.userId;
