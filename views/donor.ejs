@@ -83,12 +83,7 @@
                 button.disabled = true;
                 messageSpan.style.display = 'none';
 
-                const units = prompt("Enter number of units to donate:");
-                if (!units || isNaN(units) || parseInt(units) <= 0) {
-                    alert("Please enter a valid number.");
-                    button.disabled = false;
-                    return;
-                }
+                const units = 1;
 
                 fetch('/donor/donate-event', {
                     method: 'POST',

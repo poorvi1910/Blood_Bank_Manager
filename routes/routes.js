@@ -4,29 +4,7 @@ const router = express.Router();
 const { executeQuery } = require('../db/db');
 const oracledb = require('oracledb');
 const { initializeProcedures } = require('../db/procedures');
-initializeProcedures();
-
-// async function initializePool() {
-//     try {
-//       await oracledb.createPool({
-//         user: "C##user1",
-//         password: "pass1",
-//         connectString: "localhost:1521/XE", // e.g., "localhost/XE"
-//         poolAlias: "default", // Important: Set the alias to "default" if that's what your code expects
-//         poolMin: 5,
-//         poolMax: 10,
-//         poolIncrement: 1
-//         // ... other pool options
-//       });
-//       console.log('Oracle connection pool initialized.');
-//     } catch (err) {
-//       console.error('Error initializing Oracle connection pool:', err);
-//       process.exit(1); // Exit the application if pool creation fails
-//     }
-//   }
-
-//   initializePool();
-  
+initializeProcedures();  
 
 router.get('/', (req, res) => {
     res.render('index');
@@ -194,7 +172,8 @@ router.get('/donor', async (req, res) => {
 });
 
 router.post('/donor/donate-event', async (req, res) => {
-  const { eventId, bloodBankId, units } = req.body;
+  const units=1;
+  const { eventId, bloodBankId} = req.body;
   const donorId = req.session.userId;
 
   if (!units || !donorId) {
@@ -425,7 +404,12 @@ router.post('/admin/check-inventory', async (req, res) => {
       }
   
       // 3) Start transaction: deduct & insert
-      const connection = await oracledb.getConnection("default");
+      const connection = await oracledb.getConnection({
+        user: "system",
+        password: "pmysql",
+        connectString: "localhost:1521/XE"
+      });
+
       try {
         
   
