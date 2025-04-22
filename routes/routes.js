@@ -51,38 +51,48 @@ router.post('/register', async (req, res) => {
             res.redirect('/');
 
         } else if (role === 'admin') {
-            const { a_name, bloodBankID, a_address, a_phoneNo, password } = req.body;
-
-            if (!a_name || !bloodBankID || !a_address || !a_phoneNo || !password) {
-                return res.status(400).send("Missing required admin information.");
+            const { a_name, bloodBankID, a_address, a_phoneNo, password, bankPassword } = req.body;
+        
+            if (!a_name || !bloodBankID || !a_address || !a_phoneNo || !password || !bankPassword) {
+                return res.status(400).send("Missing required admin information or blood bank password.");
+            }
+        
+            const bankPasswordQuery = `SELECT Password FROM BloodBank WHERE BloodBankID = :bloodBankID`;
+            const result = await executeQuery(bankPasswordQuery, { bloodBankID: parseInt(bloodBankID, 10) });
+        
+            if (!result.rows || result.rows.length === 0) {
+                return res.status(400).send("Invalid Blood Bank ID.");
             }
 
-            const query = `BEGIN REGISTER_ADMIN(:a_name, :bloodBankID, :a_address, :a_phoneNo, :password); END;`;
+            const correctBankPassword = result.rows[0][0];
+            if (bankPassword !== correctBankPassword) {
+                return res.status(401).send("Incorrect Blood Bank password. Registration denied.");
+            }
+        
+            const registerQuery = `BEGIN REGISTER_ADMIN(:a_name, :bloodBankID, :a_address, :a_phoneNo, :password); END;`;
             const binds = {
-                a_name, bloodBankID: parseInt(bloodBankID, 10), a_address, a_phoneNo, password
+                a_name,
+                bloodBankID: parseInt(bloodBankID, 10),
+                a_address,
+                a_phoneNo,
+                password,
             };
-
-            // Execute the query to register the admin
-            await executeQuery(query, binds);
+        
+            await executeQuery(registerQuery, binds);
             console.log("Admin registered successfully.");
             res.redirect('/');
         }
 
     } catch (err) {
         console.error("Registration Error:", err);
-
-        // Custom error handling for the age check triggered in the donor registration
         if (err.errorNum === 20001) {
             return res.status(400).send(err.message.replace("ORA-20001: ", "")); // Extract and show the custom age error message
         }
-
-        // Handle other known Oracle errors
         if (err.errorNum === 1) {
             res.status(409).send("Registration failed. A user or admin with some of these details (e.g., phone, name) might already exist.");
         } else if (err.errorNum === 2291) {
             res.status(400).send("Registration failed. Invalid data provided (e.g., the specified Blood Bank ID does not exist).");
         } else {
-            // General server error message if other errors occur
             res.status(500).send("Registration failed due to a server error. Please try again later.");
         }
     }
@@ -136,7 +146,6 @@ router.post('/admin-login', async (req, res) => {
              
                 console.log(`Admin login successful: ${name}`);
                 
-                // Fetch BloodBankID of this admin
                 const bloodBankResult = await executeQuery(
                     `SELECT BloodBankID FROM Administrators WHERE A_Name = :name`,
                     [name],
@@ -147,9 +156,7 @@ router.post('/admin-login', async (req, res) => {
                 if (!bloodBankId) {
                     return res.status(500).send("Could not find Blood Bank ID for admin.");
                 }
-            
-                // Simulating session with global (replace with session or jwt ideally)
-               // In your /admin-login route, after setting the session
+
               req.session.adminBloodBankId = bloodBankId; // Already exists
               console.log("Blood Bank ID set in session:", req.session.adminBloodBankId);
             
@@ -206,7 +213,6 @@ router.post('/donor/donate-event', async (req, res) => {
     try {
         let finalBloodBankId = bloodBankId;
   
-        // If donating to event, get its blood bank
         if (eventId) {
             const eventResult = await executeQuery(
                 `SELECT BloodBankID FROM DonationEvents WHERE EventID = :eventId`,
@@ -217,8 +223,7 @@ router.post('/donor/donate-event', async (req, res) => {
             }
             finalBloodBankId = eventResult.rows[0].BLOODBANKID;
         }
-  
-        // Attempt to insert the donation, trigger will check eligibility
+
         await executeQuery(`
             INSERT INTO DonationInfo (DonationID, BloodBankID, UnitsDonated, EventID, CollectionDate, DonorID, ExpiryDate)
             VALUES (DONATION_SEQ.NEXTVAL, :bloodBankId, :units, :eventId, SYSDATE, :donorId, SYSDATE + 42)
