@@ -1,4 +1,3 @@
-// routes.js
 const express = require('express');
 const router = express.Router();
 const { executeQuery } = require('../db/db');
@@ -98,7 +97,6 @@ router.post('/register', async (req, res) => {
     }
 });
 
-
 router.post('/login', async (req, res) => {
   const { name, password } = req.body;
   if (!name || !password) {
@@ -128,7 +126,6 @@ router.post('/login', async (req, res) => {
       res.status(500).send("Login failed due to a server error.");
   }
 });
-
 
 router.post('/admin-login', async (req, res) => {
     const { name, password } = req.body;
@@ -265,9 +262,6 @@ router.post('/donor/donate-event', async (req, res) => {
     }
   });
   
-
-
-
 router.get('/admindonor', async (req, res) => {
     try {
         const bloodBankId = req.session.adminBloodBankId;
@@ -305,7 +299,6 @@ router.get('/admindonor', async (req, res) => {
     }
 });
 
-
 router.get('/adminreceiver', async (req, res) => {
     try {
         const bloodBankId = req.session.adminBloodBankId;
@@ -338,7 +331,6 @@ router.get('/adminreceiver', async (req, res) => {
         res.status(500).send("Failed to load receival requests.");
     }
 });
-
 
 router.post('/admin/check-inventory', async (req, res) => {
     const { recipientID, requiredUnits, recipientBloodGroup } = req.body;
@@ -395,7 +387,6 @@ router.post('/admin/check-inventory', async (req, res) => {
       res.status(500).send("Internal server error: " + err.message);
     }
   });
-  
 
   router.post('/admin/review-receival', async (req, res) => {
     const { recipientId, action } = req.body;
@@ -471,8 +462,8 @@ router.post('/admin/check-inventory', async (req, res) => {
   
       // Perform updates inside transaction
       const connection = await oracledb.getConnection({
-        user: "C##user1",
-        password: "pass1",
+        user: "system",
+        password: "pmysql",
         connectString: "localhost:1521/XE"
       });
   
@@ -514,7 +505,6 @@ router.post('/admin/check-inventory', async (req, res) => {
       return res.status(500).json({ success: false, message: 'Server error during review.' });
     }
   });
-  
   
   router.get('/receiver', async (req, res) => {
     const donorId = req.session.userId;
@@ -579,7 +569,6 @@ router.post('/receiver/request', async (req, res) => {
     }
 });
 
-
 router.get('/admin', (req, res) => {
     res.render('admin'); 
 });
@@ -612,7 +601,5 @@ router.post('/admin/review-donation', async (req, res) => {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
-
-
 
 module.exports = router;
