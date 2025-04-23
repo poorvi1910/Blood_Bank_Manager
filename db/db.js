@@ -1,8 +1,8 @@
 const oracledb = require('oracledb');
 
 const dbConfig = {
-  user: "C##user1",
-  password: "pass1",
+  user: "system",
+  password: "pmysql",
   connectString: "localhost:1521/XE"
 };
 

@@ -154,7 +154,7 @@
                 .then(data => {
                     if (data.success) {
                         alert(`Donation ${action}ed successfully!`);
-                        row.remove(); // Remove the row from the table
+                        row.remove();
                     } else {
                         alert(`Error: ${data.message}`);
                     }

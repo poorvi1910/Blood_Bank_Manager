@@ -1,4 +1,3 @@
-// routes.js
 const express = require('express');
 const router = express.Router();
 const { executeQuery } = require('../db/db');
@@ -51,43 +50,52 @@ router.post('/register', async (req, res) => {
             res.redirect('/');
 
         } else if (role === 'admin') {
-            const { a_name, bloodBankID, a_address, a_phoneNo, password } = req.body;
-
-            if (!a_name || !bloodBankID || !a_address || !a_phoneNo || !password) {
-                return res.status(400).send("Missing required admin information.");
+            const { a_name, bloodBankID, a_address, a_phoneNo, password, bankPassword } = req.body;
+        
+            if (!a_name || !bloodBankID || !a_address || !a_phoneNo || !password || !bankPassword) {
+                return res.status(400).send("Missing required admin information or blood bank password.");
+            }
+        
+            const bankPasswordQuery = `SELECT Password FROM BloodBank WHERE BloodBankID = :bloodBankID`;
+            const result = await executeQuery(bankPasswordQuery, { bloodBankID: parseInt(bloodBankID, 10) });
+        
+            if (!result.rows || result.rows.length === 0) {
+                return res.status(400).send("Invalid Blood Bank ID.");
             }
 
-            const query = `BEGIN REGISTER_ADMIN(:a_name, :bloodBankID, :a_address, :a_phoneNo, :password); END;`;
+            const correctBankPassword = result.rows[0][0];
+            if (bankPassword !== correctBankPassword) {
+                return res.status(401).send("Incorrect Blood Bank password. Registration denied.");
+            }
+        
+            const registerQuery = `BEGIN REGISTER_ADMIN(:a_name, :bloodBankID, :a_address, :a_phoneNo, :password); END;`;
             const binds = {
-                a_name, bloodBankID: parseInt(bloodBankID, 10), a_address, a_phoneNo, password
+                a_name,
+                bloodBankID: parseInt(bloodBankID, 10),
+                a_address,
+                a_phoneNo,
+                password,
             };
-
-            // Execute the query to register the admin
-            await executeQuery(query, binds);
+        
+            await executeQuery(registerQuery, binds);
             console.log("Admin registered successfully.");
             res.redirect('/');
         }
 
     } catch (err) {
         console.error("Registration Error:", err);
-
-        // Custom error handling for the age check triggered in the donor registration
         if (err.errorNum === 20001) {
-            return res.status(400).send(err.message.replace("ORA-20001: ", "")); // Extract and show the custom age error message
+            return res.status(400).send(err.message.replace("ORA-20001: ", ""));
         }
-
-        // Handle other known Oracle errors
         if (err.errorNum === 1) {
             res.status(409).send("Registration failed. A user or admin with some of these details (e.g., phone, name) might already exist.");
         } else if (err.errorNum === 2291) {
             res.status(400).send("Registration failed. Invalid data provided (e.g., the specified Blood Bank ID does not exist).");
         } else {
-            // General server error message if other errors occur
             res.status(500).send("Registration failed due to a server error. Please try again later.");
         }
     }
 });
-
 
 router.post('/login', async (req, res) => {
   const { name, password } = req.body;
@@ -106,7 +114,7 @@ router.post('/login', async (req, res) => {
       const result = await executeQuery(query, binds);
 
       if (result.outBinds && result.outBinds.is_valid === 1) {
-          req.session.userId = result.outBinds.donor_id; // Store DonorID in session
+          req.session.userId = result.outBinds.donor_id;
           console.log(`Donor login successful: ${name}, DonorID: ${result.outBinds.donor_id}`);
           res.render('home');
       } else {
@@ -118,7 +126,6 @@ router.post('/login', async (req, res) => {
       res.status(500).send("Login failed due to a server error.");
   }
 });
-
 
 router.post('/admin-login', async (req, res) => {
     const { name, password } = req.body;
@@ -136,7 +143,6 @@ router.post('/admin-login', async (req, res) => {
              
                 console.log(`Admin login successful: ${name}`);
                 
-                // Fetch BloodBankID of this admin
                 const bloodBankResult = await executeQuery(
                     `SELECT BloodBankID FROM Administrators WHERE A_Name = :name`,
                     [name],
@@ -147,10 +153,8 @@ router.post('/admin-login', async (req, res) => {
                 if (!bloodBankId) {
                     return res.status(500).send("Could not find Blood Bank ID for admin.");
                 }
-            
-                // Simulating session with global (replace with session or jwt ideally)
-               // In your /admin-login route, after setting the session
-              req.session.adminBloodBankId = bloodBankId; // Already exists
+
+              req.session.adminBloodBankId = bloodBankId;
               console.log("Blood Bank ID set in session:", req.session.adminBloodBankId);
             
                 res.redirect('/admin');
@@ -206,7 +210,6 @@ router.post('/donor/donate-event', async (req, res) => {
     try {
         let finalBloodBankId = bloodBankId;
   
-        // If donating to event, get its blood bank
         if (eventId) {
             const eventResult = await executeQuery(
                 `SELECT BloodBankID FROM DonationEvents WHERE EventID = :eventId`,
@@ -217,8 +220,7 @@ router.post('/donor/donate-event', async (req, res) => {
             }
             finalBloodBankId = eventResult.rows[0].BLOODBANKID;
         }
-  
-        // Attempt to insert the donation, trigger will check eligibility
+
         await executeQuery(`
             INSERT INTO DonationInfo (DonationID, BloodBankID, UnitsDonated, EventID, CollectionDate, DonorID, ExpiryDate)
             VALUES (DONATION_SEQ.NEXTVAL, :bloodBankId, :units, :eventId, SYSDATE, :donorId, SYSDATE + 42)
@@ -254,15 +256,10 @@ router.post('/donor/donate-event', async (req, res) => {
             });
         }
         
-        
-        // Handle other potential errors
         res.status(500).json({ success: false, message: 'Server error.' });
     }
   });
   
-
-
-
 router.get('/admindonor', async (req, res) => {
     try {
         const bloodBankId = req.session.adminBloodBankId;
@@ -300,7 +297,6 @@ router.get('/admindonor', async (req, res) => {
     }
 });
 
-
 router.get('/adminreceiver', async (req, res) => {
     try {
         const bloodBankId = req.session.adminBloodBankId;
@@ -333,7 +329,6 @@ router.get('/adminreceiver', async (req, res) => {
         res.status(500).send("Failed to load receival requests.");
     }
 });
-
 
 router.post('/admin/check-inventory', async (req, res) => {
     const { recipientID, requiredUnits, recipientBloodGroup } = req.body;
@@ -390,7 +385,6 @@ router.post('/admin/check-inventory', async (req, res) => {
       res.status(500).send("Internal server error: " + err.message);
     }
   });
-  
 
   router.post('/admin/review-receival', async (req, res) => {
     const { recipientId, action } = req.body;
@@ -419,7 +413,6 @@ router.post('/admin/check-inventory', async (req, res) => {
         return res.json({ success: true, message: 'Request rejected.' });
       }
   
-      // Compatibility
       const compatibleMap = {
         'O-': ['O-'], 'O+': ['O-','O+'], 'A-': ['O-','A-'],
         'A+': ['O-','O+','A-','A+'], 'B-': ['O-','B-'],
@@ -448,8 +441,7 @@ router.post('/admin/check-inventory', async (req, res) => {
       if (!donations.length) {
         return res.json({ success: false, message: 'No compatible donations available.' });
       }
-  
-      // Start accumulating donations
+
       let unitsNeeded = recipient.REQUIREDUNITS;
       let allocations = [];
   
@@ -466,8 +458,8 @@ router.post('/admin/check-inventory', async (req, res) => {
   
       // Perform updates inside transaction
       const connection = await oracledb.getConnection({
-        user: "C##user1",
-        password: "pass1",
+        user: "system",
+        password: "pmysql",
         connectString: "localhost:1521/XE"
       });
   
@@ -509,7 +501,6 @@ router.post('/admin/check-inventory', async (req, res) => {
       return res.status(500).json({ success: false, message: 'Server error during review.' });
     }
   });
-  
   
   router.get('/receiver', async (req, res) => {
     const donorId = req.session.userId;
@@ -574,7 +565,6 @@ router.post('/receiver/request', async (req, res) => {
     }
 });
 
-
 router.get('/admin', (req, res) => {
     res.render('admin'); 
 });
@@ -593,13 +583,11 @@ router.post('/admin/review-donation', async (req, res) => {
             const result = await executeQuery(
                 `DELETE FROM DonationInfo WHERE DONATIONID = :id`,
                 { id: donationId },
-                { autoCommit: true }  // this will commit immediately
+                { autoCommit: true }
             );
 
             console.log('Rows deleted:', result.rowsAffected);
         }
-
-        // You can add handling for "accept" action here if needed
         res.json({ success: true });
 
     } catch (err) {
@@ -607,7 +595,5 @@ router.post('/admin/review-donation', async (req, res) => {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
-
-
 
 module.exports = router;

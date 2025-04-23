@@ -122,8 +122,6 @@
     document.querySelectorAll('.submit-btn').forEach(button => {
         button.addEventListener('click', () => {
           const row = button.closest('tr');
-      
-          // <-- use camelCase here
           const recipientId = row.dataset.recipientId;
           const action      = row.querySelector('.action-select').value;
       
