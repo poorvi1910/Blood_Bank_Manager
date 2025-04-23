@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="/styles.css" rel="stylesheet">
-  <title>Blood Bank Login</title> <!-- Added title -->
+  <title>Blood Bank Login</title> 
 </head>
 <body class="bg-yellow-100 font-sans">
   <div class="flex justify-center items-center h-screen">
@@ -12,15 +12,13 @@
       <h1 class="text-2xl font-bold text-center text-red-600 mb-6">Blood Bank Manager</h1>
       <p class="text-gray-600 text-center mb-4">Efficiently manage blood donations and requests.</p>
 
-      <!-- Login Form -->
       <form method="POST" class="space-y-4" onsubmit="updateAction(this)">
         <select name="role" id="role" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
-          <option value="" disabled selected>Select Role...</option> <!-- Added default disabled option -->
+          <option value="" disabled selected>Select Role...</option>
           <option value="donor">User</option>
           <option value="admin">Admin</option>
         </select>
 
-        <!-- 'name' corresponds to D_Name for donor or A_Name for admin -->
         <input type="text" name="name" placeholder="Username / Full Name" required class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
         <input type="password" name="password" placeholder="Password" required class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
         <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700">Login</button>
@@ -34,13 +32,12 @@
     function updateAction(form) {
       const roleSelect = form.querySelector('#role');
       const role = roleSelect.value;
-      if (!role) { // Prevent submission if role not selected
+      if (!role) {
           alert('Please select a role.');
-          event.preventDefault(); // Stop form submission
+          event.preventDefault();
           return false;
       }
       form.action = role === 'admin' ? '/admin-login' : '/login';
-      // No need to return true explicitly, default form submission will proceed
     }
   </script>
 </body>

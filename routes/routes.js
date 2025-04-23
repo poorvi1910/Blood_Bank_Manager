@@ -85,7 +85,7 @@ router.post('/register', async (req, res) => {
     } catch (err) {
         console.error("Registration Error:", err);
         if (err.errorNum === 20001) {
-            return res.status(400).send(err.message.replace("ORA-20001: ", "")); // Extract and show the custom age error message
+            return res.status(400).send(err.message.replace("ORA-20001: ", ""));
         }
         if (err.errorNum === 1) {
             res.status(409).send("Registration failed. A user or admin with some of these details (e.g., phone, name) might already exist.");
@@ -114,7 +114,7 @@ router.post('/login', async (req, res) => {
       const result = await executeQuery(query, binds);
 
       if (result.outBinds && result.outBinds.is_valid === 1) {
-          req.session.userId = result.outBinds.donor_id; // Store DonorID in session
+          req.session.userId = result.outBinds.donor_id;
           console.log(`Donor login successful: ${name}, DonorID: ${result.outBinds.donor_id}`);
           res.render('home');
       } else {
@@ -154,7 +154,7 @@ router.post('/admin-login', async (req, res) => {
                     return res.status(500).send("Could not find Blood Bank ID for admin.");
                 }
 
-              req.session.adminBloodBankId = bloodBankId; // Already exists
+              req.session.adminBloodBankId = bloodBankId;
               console.log("Blood Bank ID set in session:", req.session.adminBloodBankId);
             
                 res.redirect('/admin');
@@ -256,8 +256,6 @@ router.post('/donor/donate-event', async (req, res) => {
             });
         }
         
-        
-        // Handle other potential errors
         res.status(500).json({ success: false, message: 'Server error.' });
     }
   });
@@ -415,7 +413,6 @@ router.post('/admin/check-inventory', async (req, res) => {
         return res.json({ success: true, message: 'Request rejected.' });
       }
   
-      // Compatibility
       const compatibleMap = {
         'O-': ['O-'], 'O+': ['O-','O+'], 'A-': ['O-','A-'],
         'A+': ['O-','O+','A-','A+'], 'B-': ['O-','B-'],
@@ -444,8 +441,7 @@ router.post('/admin/check-inventory', async (req, res) => {
       if (!donations.length) {
         return res.json({ success: false, message: 'No compatible donations available.' });
       }
-  
-      // Start accumulating donations
+
       let unitsNeeded = recipient.REQUIREDUNITS;
       let allocations = [];
   
@@ -587,13 +583,11 @@ router.post('/admin/review-donation', async (req, res) => {
             const result = await executeQuery(
                 `DELETE FROM DonationInfo WHERE DONATIONID = :id`,
                 { id: donationId },
-                { autoCommit: true }  // this will commit immediately
+                { autoCommit: true }
             );
 
             console.log('Rows deleted:', result.rowsAffected);
         }
-
-        // You can add handling for "accept" action here if needed
         res.json({ success: true });
 
     } catch (err) {

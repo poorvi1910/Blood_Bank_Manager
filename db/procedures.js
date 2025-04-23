@@ -37,7 +37,7 @@ async function createRegisterDonorProcedure() {
     `; 
 
     try {
-        await executeQuery(procQuery, {}); // Use executeQuery which should handle DDL
+        await executeQuery(procQuery, {});
         console.log("Stored Procedure 'REGISTER_DONOR' created/replaced successfully.");
     } catch (err) {
         console.error("Error creating/replacing 'REGISTER_DONOR':", err);

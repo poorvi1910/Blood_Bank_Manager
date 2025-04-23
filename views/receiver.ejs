@@ -7,7 +7,6 @@
 </head>
 <body class="h-screen flex flex-col bg-yellow-100">
 
-    <!-- Navbar -->
     <nav class="flex items-center bg-red-600 p-6 justify-end">
         <form method="post" action="/logout">
             <button type="submit" class="bg-red-600 text-red-100 hover:bg-white hover:text-red-400 rounded mr-4 px-4 py-2">
@@ -16,10 +15,8 @@
         </form>
     </nav>
 
-    <!-- Main Content -->
     <div class="flex flex-col sm:flex-row justify-center bg-yellow-100 flex-grow p-6 gap-6">
 
-        <!-- Left: Blood Bank Info -->
         <div class="w-full sm:w-1/2 bg-white rounded-xl p-4 shadow-lg overflow-y-auto max-h-[75vh]">
             <h2 class="text-xl font-bold mb-4 text-red-600">Available Blood Banks</h2>
             <% bloodbanks.forEach(bank => { %>
@@ -31,7 +28,6 @@
             <% }) %>
         </div>
 
-        <!-- Right: Blood Request Form -->
         <div class="w-full sm:w-1/2 bg-white rounded-xl p-4 shadow-lg">
             <h2 class="text-xl font-bold mb-4 text-red-600">Request Blood</h2>
             <form method="post" action="/receiver/request" class="flex flex-col gap-3">
@@ -60,7 +56,6 @@
 
     </div>
 
-    <!-- Footer -->
     <footer class="bg-red-600 text-white text-center py-3">
         <p class="text-lg font-semibold">Contact Us</p>
         <p>Email: support@bloodbankmanager.com</p>
